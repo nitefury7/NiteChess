@@ -13,13 +13,14 @@ builder.Services.AddNiteChessApplication(
         Surface: "BlazorWebAssembly",
         SupportsOfflineAi: true,
         SupportsOnlinePlay: true,
-        Notes: "Browser client is prepared for offline AI and hosted deployment."),
+        Notes: "Browser client is prepared for offline AI via a Stockfish WebAssembly worker bundle under wwwroot/stockfish."),
     new StockfishRuntimeDescriptor(
         HostId: "web-client",
         IntegrationMode: StockfishIntegrationMode.BrowserWasmWorker,
         RuntimeLocation: "wwwroot/workers/stockfish.worker.js",
         IsBundled: false,
-        Notes: "Actual browser worker + WASM asset wiring lands in a later wave."));
+        Notes: "Bundle manifest ships at wwwroot/stockfish/web-stockfish.bundle.json; add Stockfish 18 WASM assets under wwwroot/stockfish and boot them through the dedicated worker."));
 builder.Services.AddSingleton<IStockfishRuntimeBootstrapper, BrowserWorkerStockfishRuntimeBootstrapper>();
+builder.Services.AddSingleton<IStockfishEngineClient, BrowserWorkerStockfishEngineClient>();
 
 await builder.Build().RunAsync();

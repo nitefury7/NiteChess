@@ -7,5 +7,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/NiteChess.Application/NiteChess.Application.csproj" />
     <ProjectReference Include="../../src/NiteChess.Domain/NiteChess.Domain.csproj" />
+    <ProjectReference Include="../../src/NiteChess.Stockfish/NiteChess.Stockfish.csproj" />
   </ItemGroup>
 </Project>

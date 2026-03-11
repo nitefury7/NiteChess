@@ -1,0 +1,13 @@
+{
+  "hostId": "desktop",
+  "integrationMode": "NativeProcess",
+  "bundleRoot": "Assets/Stockfish/native",
+  "entryPointPattern": "Assets/Stockfish/native/{rid}/stockfish",
+  "requiredAssets": [
+    "Assets/Stockfish/native/osx-arm64/stockfish",
+    "Assets/Stockfish/native/osx-x64/stockfish",
+    "Assets/Stockfish/native/linux-arm64/stockfish",
+    "Assets/Stockfish/native/linux-x64/stockfish"
+  ],
+  "notes": "Place Stockfish 18 executables and adjacent NNUE network files in the matching RID folders. Desktop copies this asset tree into the local app output so AI play remains offline."
+}

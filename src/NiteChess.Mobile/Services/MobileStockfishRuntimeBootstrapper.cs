@@ -9,9 +9,9 @@ public sealed class MobileStockfishRuntimeBootstrapper : IStockfishRuntimeBootst
         return new StockfishRuntimeDescriptor(
             HostId: "mobile",
             IntegrationMode: StockfishIntegrationMode.NativeLibrary,
-            RuntimeLocation: "platform-local/stockfish",
+            RuntimeLocation: "Resources/Raw/Stockfish/native/{platform}/libnitechess_stockfish_bridge",
             IsBundled: false,
-            Notes: "Mobile scaffold reserves a native library seam for local Stockfish.");
+            Notes: "Mobile package manifest lives at Resources/Raw/Stockfish/mobile-stockfish.bundle.json and expects a native bridge library exposing the NiteChess Stockfish C ABI plus linked Stockfish 18 assets in per-platform folders.");
     }
 
     public ValueTask WarmUpAsync(CancellationToken cancellationToken = default)

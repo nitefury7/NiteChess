@@ -11,7 +11,7 @@ public sealed class BrowserWorkerStockfishRuntimeBootstrapper : IStockfishRuntim
             IntegrationMode: StockfishIntegrationMode.BrowserWasmWorker,
             RuntimeLocation: "wwwroot/workers/stockfish.worker.js",
             IsBundled: false,
-            Notes: "Placeholder registration for future browser-side Stockfish WASM wiring.");
+            Notes: "Web package manifest lives at wwwroot/stockfish/web-stockfish.bundle.json and expects Stockfish 18 WASM assets under wwwroot/stockfish for offline worker-based play.");
     }
 
     public ValueTask WarmUpAsync(CancellationToken cancellationToken = default)

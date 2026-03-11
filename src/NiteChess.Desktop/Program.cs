@@ -20,13 +20,13 @@ internal static class Program
                 Surface: "AvaloniaDesktop",
                 SupportsOfflineAi: true,
                 SupportsOnlinePlay: true,
-                Notes: "Desktop shell targets macOS and Linux with future local Stockfish packaging."),
+                Notes: "Desktop shell targets macOS and Linux with offline Stockfish packaging scaffolded under Assets/Stockfish."),
             new StockfishRuntimeDescriptor(
                 HostId: "desktop",
                 IntegrationMode: StockfishIntegrationMode.NativeProcess,
-                RuntimeLocation: "app-local/stockfish",
+                RuntimeLocation: "Assets/Stockfish/native/{rid}/stockfish",
                 IsBundled: false,
-                Notes: "Actual native binary packaging lands in a later wave."));
+                Notes: "Bundle manifest ships at Assets/Stockfish/desktop-stockfish.bundle.json; drop Stockfish 18 executables and NNUE files into the per-RID native folders."));
         services.AddSingleton<IStockfishRuntimeBootstrapper, DesktopStockfishRuntimeBootstrapper>();
 
         App.Services = services.BuildServiceProvider();

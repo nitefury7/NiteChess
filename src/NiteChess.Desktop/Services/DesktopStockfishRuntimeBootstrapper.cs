@@ -9,9 +9,9 @@ public sealed class DesktopStockfishRuntimeBootstrapper : IStockfishRuntimeBoots
         return new StockfishRuntimeDescriptor(
             HostId: "desktop",
             IntegrationMode: StockfishIntegrationMode.NativeProcess,
-            RuntimeLocation: "app-local/stockfish",
+            RuntimeLocation: "Assets/Stockfish/native/{rid}/stockfish",
             IsBundled: false,
-            Notes: "Desktop scaffold reserves a local native Stockfish seam.");
+            Notes: "Desktop package manifest lives at Assets/Stockfish/desktop-stockfish.bundle.json and expects local Stockfish 18 executables plus NNUE files in per-RID folders.");
     }
 
     public ValueTask WarmUpAsync(CancellationToken cancellationToken = default)

@@ -1,0 +1,11 @@
+{
+  "hostId": "web-client",
+  "integrationMode": "BrowserWasmWorker",
+  "bundleRoot": "wwwroot/stockfish",
+  "workerEntryPoint": "wwwroot/workers/stockfish.worker.js",
+  "requiredAssets": [
+    "wwwroot/stockfish/stockfish.js",
+    "wwwroot/stockfish/stockfish.wasm"
+  ],
+  "notes": "Serve Stockfish 18 WebAssembly assets as static web files and load them inside the dedicated worker so offline browser sessions evaluate locally without any server round-trip."
+}

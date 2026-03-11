@@ -10,6 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Assets/Stockfish/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />

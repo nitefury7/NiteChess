@@ -1,5 +1,8 @@
+using NiteChess.Application.ComputerPlay;
 using NiteChess.Application.GameSessions;
 using NiteChess.Domain.Chess;
+using NiteChess.Stockfish;
+using NiteChess.Stockfish.Abstractions;
 
 var scenarios = new (string Name, Action Execute)[]
 {
@@ -16,7 +19,14 @@ var scenarios = new (string Name, Action Execute)[]
     ("Session history tracks applied local moves", SessionHistoryTracksAppliedLocalMoves),
     ("Promotion selection pauses play until a choice is made", PromotionSelectionPausesPlayUntilChoice),
     ("Persistence restores completed move history and supports resume", PersistenceRestoresMoveHistoryAndSupportsResume),
-    ("Persistence restores pending promotion state", PersistenceRestoresPendingPromotionState)
+    ("Persistence restores pending promotion state", PersistenceRestoresPendingPromotionState),
+    ("Stockfish FEN serialization matches the initial position", StockfishFenSerializerMatchesInitialPosition),
+    ("AI difficulty presets map to deterministic Stockfish profiles", AiDifficultyPresetsMapToDeterministicStockfishProfiles),
+    ("Stockfish command builder emits deterministic UCI commands", StockfishCommandBuilderEmitsDeterministicUciCommands),
+    ("Native-process Stockfish path can smoke-request one engine move", NativeProcessStockfishPathCanSmokeRequestOneEngineMove),
+    ("Native-library Stockfish path can parse one bridged engine move", NativeLibraryStockfishPathCanParseOneBridgedEngineMove),
+    ("Computer move service requests and validates an engine move", ComputerMoveServiceRequestsAndValidatesEngineMove),
+    ("Computer move service rejects sessions with pending promotion", ComputerMoveServiceRejectsPendingPromotionSessions)
 };
 
 var failures = new List<string>();
@@ -310,6 +320,155 @@ static void PersistenceRestoresPendingPromotionState()
     Assert.Equal(new ChessPiece(ChessColor.White, PieceType.Queen), promoted.Session.Game.Board[ChessPosition.Parse("g8")], "Restored pending promotion should resume into the chosen piece.");
 }
 
+static void StockfishFenSerializerMatchesInitialPosition()
+{
+    Assert.Equal(
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        StockfishFenSerializer.ToFen(ChessGame.CreateInitial()),
+        "Initial chess position should serialize to the canonical starting FEN.");
+}
+
+static void AiDifficultyPresetsMapToDeterministicStockfishProfiles()
+{
+    foreach (var (difficulty, presetId, depth) in new[]
+             {
+                 (AiDifficulty.Easy, "easy", 4),
+                 (AiDifficulty.Medium, "medium", 8),
+                 (AiDifficulty.Hard, "hard", 12),
+                 (AiDifficulty.Expert, "expert", 16)
+             })
+    {
+        var engine = new CapturingStockfishEngineClient("e2e4");
+        var service = new StockfishComputerMoveService(engine);
+
+        _ = GetComputerMove(service, new GameSessionService().CreateSession(), difficulty);
+
+        Assert.NotNull(engine.LastRequest, $"Difficulty '{difficulty}' should issue a Stockfish request.");
+        Assert.Equal(presetId, engine.LastRequest!.SearchConfiguration.PresetId, $"Difficulty '{difficulty}' should map to the expected preset id.");
+        Assert.Equal(depth, engine.LastRequest.SearchConfiguration.SearchDepth, $"Difficulty '{difficulty}' should map to a deterministic search depth.");
+        Assert.Equal(1, engine.LastRequest.SearchConfiguration.Threads, $"Difficulty '{difficulty}' should pin Stockfish to a single thread for deterministic offline play.");
+        Assert.Equal(16, engine.LastRequest.SearchConfiguration.HashMegabytes, $"Difficulty '{difficulty}' should keep a stable hash size.");
+        Assert.False(engine.LastRequest.SearchConfiguration.PonderEnabled, $"Difficulty '{difficulty}' should keep ponder disabled.");
+    }
+}
+
+static void StockfishCommandBuilderEmitsDeterministicUciCommands()
+{
+    var commands = StockfishUciCommandBuilder.Build(
+        new StockfishEngineRequest(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            new StockfishSearchConfiguration("expert", 16, 1, 16, 1, 0, false)));
+
+    Assert.SequenceEqual(
+        new[]
+        {
+            "uci",
+            "setoption name Threads value 1",
+            "setoption name Hash value 16",
+            "setoption name MultiPV value 1",
+            "setoption name Move Overhead value 0",
+            "setoption name Ponder value false",
+            "setoption name UCI_Chess960 value false",
+            "setoption name UCI_LimitStrength value false",
+            "setoption name UCI_ShowWDL value false",
+            "ucinewgame",
+            "isready",
+            "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "go depth 16"
+        },
+        commands,
+        "Stockfish command builder should emit the stable UCI sequence used by the offline AI abstraction.");
+}
+
+static void NativeProcessStockfishPathCanSmokeRequestOneEngineMove()
+{
+    var runtimePath = CreateFakeNativeStockfishRuntime();
+
+    try
+    {
+        var engine = new RuntimeConfiguredStockfishEngineClient(
+            new StockfishRuntimeDescriptor(
+                HostId: "scenario",
+                IntegrationMode: StockfishIntegrationMode.NativeProcess,
+                RuntimeLocation: runtimePath,
+                IsBundled: true,
+                Notes: "Scenario-local fake UCI engine."));
+        var service = new StockfishComputerMoveService(engine);
+
+        var move = GetComputerMove(service, new GameSessionService().CreateSession(), AiDifficulty.Hard);
+
+        Assert.Equal(
+            ChessMove.Parse("e2e4"),
+            move,
+            "The native-process Stockfish path should support a smoke move request through the shared abstraction.");
+    }
+    finally
+    {
+        DeleteParentDirectory(runtimePath);
+    }
+}
+
+static void NativeLibraryStockfishPathCanParseOneBridgedEngineMove()
+{
+    var engine = new RuntimeConfiguredStockfishEngineClient(
+        new StockfishRuntimeDescriptor(
+            HostId: "mobile-test",
+            IntegrationMode: StockfishIntegrationMode.NativeLibrary,
+            RuntimeLocation: "Resources/Raw/Stockfish/native/android-arm64-v8a/libnitechess_stockfish_bridge",
+            IsBundled: true,
+            Notes: "Scenario-local mobile bridge stub."),
+        new[]
+        {
+            new TestNativeLibraryStockfishEngineClientFactory(_ => "bestmove e2e4 ponder e7e5")
+        });
+    var service = new StockfishComputerMoveService(engine);
+
+    var move = GetComputerMove(service, new GameSessionService().CreateSession(), AiDifficulty.Medium);
+
+    Assert.Equal(
+        ChessMove.Parse("e2e4"),
+        move,
+        "The native-library Stockfish path should support a bridged engine bestmove response through the shared abstraction.");
+}
+
+static void ComputerMoveServiceRequestsAndValidatesEngineMove()
+{
+    var engine = new CapturingStockfishEngineClient("e2e4");
+    var service = new StockfishComputerMoveService(engine);
+    var move = GetComputerMove(service, new GameSessionService().CreateSession(), AiDifficulty.Medium);
+
+    Assert.Equal(ChessMove.Parse("e2e4"), move, "The computer move service should parse the engine best move response.");
+    Assert.NotNull(engine.LastRequest, "A Stockfish request should be captured for move generation.");
+    Assert.Equal(
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        engine.LastRequest!.PositionFen,
+        "The computer move service should send the current position as FEN.");
+    Assert.SequenceEqual(
+        StockfishUciCommandBuilder.Build(engine.LastRequest),
+        engine.LastResponse!.Commands,
+        "The captured engine response should retain the deterministic command list for inspection.");
+}
+
+static void ComputerMoveServiceRejectsPendingPromotionSessions()
+{
+    var sessionService = new GameSessionService();
+    var pendingPromotion = sessionService.SubmitMove(
+            sessionService.CreateSession(CreateGame(
+                ChessColor.White,
+                CastlingRights.None,
+                ("h1", new ChessPiece(ChessColor.White, PieceType.King)),
+                ("g7", new ChessPiece(ChessColor.White, PieceType.Pawn)),
+                ("a8", new ChessPiece(ChessColor.Black, PieceType.King)))),
+            ChessPosition.Parse("g7"),
+            ChessPosition.Parse("g8"))
+        .Session;
+    var service = new StockfishComputerMoveService(new CapturingStockfishEngineClient("a8a7"));
+
+    Assert.Throws<InvalidOperationException>(
+        () => GetComputerMove(service, pendingPromotion, AiDifficulty.Easy),
+        "Computer move requests should be rejected while a promotion choice is pending.");
+}
+
 static ChessGame CreateGame(
     ChessColor sideToMove,
     CastlingRights castlingRights,
@@ -323,6 +482,150 @@ static ChessGame CreateGame(
     }
 
     return new ChessGame(board, sideToMove, castlingRights);
+}
+
+static ChessMove GetComputerMove(IComputerMoveService service, LocalGameSession session, AiDifficulty difficulty)
+{
+    return service.GetMoveAsync(session, difficulty).AsTask().GetAwaiter().GetResult();
+}
+
+static string CreateFakeNativeStockfishRuntime()
+{
+    var runtimeDirectory = Path.Combine(Path.GetTempPath(), $"nitechess-stockfish-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(runtimeDirectory);
+
+    if (OperatingSystem.IsWindows())
+    {
+        var runtimePath = Path.Combine(runtimeDirectory, "fake-stockfish.cmd");
+        File.WriteAllText(
+            runtimePath,
+            "@echo off\r\n" +
+            "setlocal EnableExtensions EnableDelayedExpansion\r\n" +
+            ":loop\r\n" +
+            "set line=\r\n" +
+            "set /p line=\r\n" +
+            "if errorlevel 1 goto :eof\r\n" +
+            "if \"!line!\"==\"uci\" (echo id name FakeStockfish& echo uciok)\r\n" +
+            "if \"!line!\"==\"isready\" echo readyok\r\n" +
+            "echo !line!| findstr /b /c:\"go \" >nul && echo bestmove e2e4 ponder e7e5\r\n" +
+            "if \"!line!\"==\"quit\" goto :eof\r\n" +
+            "goto loop\r\n");
+        return runtimePath;
+    }
+
+    var unixRuntimePath = Path.Combine(runtimeDirectory, "fake-stockfish");
+    File.WriteAllText(
+        unixRuntimePath,
+        "#!/usr/bin/env python3\n" +
+        "import sys\n" +
+        "for raw in sys.stdin:\n" +
+        "    line = raw.strip()\n" +
+        "    if line == 'uci':\n" +
+        "        print('id name FakeStockfish')\n" +
+        "        print('uciok')\n" +
+        "    elif line == 'isready':\n" +
+        "        print('readyok')\n" +
+        "    elif line.startswith('go '):\n" +
+        "        print('bestmove e2e4 ponder e7e5')\n" +
+        "    elif line == 'quit':\n" +
+        "        break\n" +
+        "    sys.stdout.flush()\n");
+    File.SetUnixFileMode(
+        unixRuntimePath,
+        UnixFileMode.UserRead |
+        UnixFileMode.UserWrite |
+        UnixFileMode.UserExecute |
+        UnixFileMode.GroupRead |
+        UnixFileMode.GroupExecute |
+        UnixFileMode.OtherRead |
+        UnixFileMode.OtherExecute);
+    return unixRuntimePath;
+}
+
+static void DeleteParentDirectory(string filePath)
+{
+    var directory = Path.GetDirectoryName(filePath);
+    if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+sealed class CapturingStockfishEngineClient : IStockfishEngineClient
+{
+    private readonly string _bestMoveNotation;
+
+    public CapturingStockfishEngineClient(string bestMoveNotation)
+    {
+        _bestMoveNotation = bestMoveNotation;
+    }
+
+    public StockfishEngineRequest? LastRequest { get; private set; }
+
+    public StockfishEngineResponse? LastResponse { get; private set; }
+
+    public ValueTask<StockfishEngineResponse> GetBestMoveAsync(
+        StockfishEngineRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        LastRequest = request;
+        LastResponse = new StockfishEngineResponse(
+            _bestMoveNotation,
+            null,
+            StockfishUciCommandBuilder.Build(request));
+        return ValueTask.FromResult(LastResponse);
+    }
+}
+
+sealed class TestNativeLibraryStockfishEngineClientFactory : IStockfishEngineClientFactory
+{
+    private readonly Func<string, string> _bridgeInvoker;
+
+    public TestNativeLibraryStockfishEngineClientFactory(Func<string, string> bridgeInvoker)
+    {
+        _bridgeInvoker = bridgeInvoker;
+    }
+
+    public bool CanCreate(StockfishRuntimeDescriptor runtimeDescriptor)
+    {
+        return runtimeDescriptor.IntegrationMode == StockfishIntegrationMode.NativeLibrary;
+    }
+
+    public IStockfishEngineClient Create(StockfishRuntimeDescriptor runtimeDescriptor)
+    {
+        return new TestNativeLibraryStockfishEngineClient(runtimeDescriptor, _bridgeInvoker);
+    }
+}
+
+sealed class TestNativeLibraryStockfishEngineClient : IStockfishEngineClient
+{
+    private readonly StockfishRuntimeDescriptor _runtimeDescriptor;
+    private readonly Func<string, string> _bridgeInvoker;
+
+    public TestNativeLibraryStockfishEngineClient(
+        StockfishRuntimeDescriptor runtimeDescriptor,
+        Func<string, string> bridgeInvoker)
+    {
+        _runtimeDescriptor = runtimeDescriptor;
+        _bridgeInvoker = bridgeInvoker;
+    }
+
+    public ValueTask<StockfishEngineResponse> GetBestMoveAsync(
+        StockfishEngineRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var commands = StockfishUciCommandBuilder.Build(request).ToArray();
+        var line = _bridgeInvoker(string.Join('\n', commands));
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (parts.Length < 2 || parts[0] != "bestmove")
+        {
+            throw new InvalidOperationException($"Malformed bridged native-library bestmove output '{line}' for '{_runtimeDescriptor.RuntimeLocation}'.");
+        }
+
+        var ponder = parts.Length >= 4 && parts[2] == "ponder" ? parts[3] : null;
+        return ValueTask.FromResult(new StockfishEngineResponse(parts[1], ponder, commands.Concat(new[] { line }).ToArray()));
+    }
 }
 
 static void AssertBoardEqual(ChessBoard expected, ChessBoard actual, string message)
@@ -413,5 +716,24 @@ static class Assert
             throw new InvalidOperationException(
                 $"{message} Expected: [{string.Join(", ", expectedValues)}]. Actual: [{string.Join(", ", actualValues)}].");
         }
+    }
+
+    public static void Throws<TException>(Action action, string message)
+        where TException : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (TException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException($"{message} Expected exception: {typeof(TException).Name}. Actual: {exception.GetType().Name}.");
+        }
+
+        throw new InvalidOperationException($"{message} Expected exception: {typeof(TException).Name}. Actual: none.");
     }
 }
