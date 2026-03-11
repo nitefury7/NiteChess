@@ -25,9 +25,9 @@ Wave 1 scaffolds the shared .NET 10 solution architecture for a cross-platform c
 1. Restore: `dotnet restore`
 2. Build: `dotnet build`
 3. Smoke-test the hosts you want to work on next:
-   - `dotnet run --project src/NiteChess.Backend`
-   - `dotnet run --project src/NiteChess.Web.Host`
-   - `dotnet run --project src/NiteChess.Web.Client`
-   - `dotnet run --project src/NiteChess.Desktop`
+  - `dotnet run --project src/NiteChess.Backend`
+  - `dotnet run --project src/NiteChess.Web.Host`
+  - `dotnet run --project src/NiteChess.Web.Client`
+  - `dotnet run --project src/NiteChess.Desktop`
 
 This milestone intentionally stops at scaffold/buildability and initial architecture seams. Chess rules, gameplay flows, persistence, and full Stockfish integration are deferred to later waves.
