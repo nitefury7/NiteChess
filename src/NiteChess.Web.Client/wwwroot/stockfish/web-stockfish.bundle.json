@@ -6,8 +6,9 @@
   "engineScript": "wwwroot/stockfish/stockfish.js",
   "engineWasm": "wwwroot/stockfish/stockfish.wasm",
   "requiredAssets": [
+    "wwwroot/workers/stockfish.worker.js",
     "wwwroot/stockfish/stockfish.js",
     "wwwroot/stockfish/stockfish.wasm"
   ],
-  "notes": "Serve the bundled Stockfish 18 single-threaded WASM engine as static web files and load it through the dedicated worker so offline browser sessions evaluate locally without any server round-trip."
+  "notes": "Serve the bundled Stockfish 18 single-threaded WASM engine plus its dedicated worker as static web files so offline browser sessions evaluate locally without any server round-trip."
 }

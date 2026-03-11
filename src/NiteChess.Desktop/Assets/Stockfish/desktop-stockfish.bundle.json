@@ -8,5 +8,5 @@
     "Assets/Stockfish/native/osx-x64/stockfish",
     "Assets/Stockfish/native/linux-x64/stockfish"
   ],
-  "notes": "Bundled desktop Stockfish 18 executables currently ship for macOS arm64, macOS x64, and Linux x64. Desktop copies this asset tree into the local app output so AI play remains offline."
+  "notes": "Bundled desktop Stockfish 18 executables currently ship for macOS arm64, macOS x64, and Linux x64. The repo keeps a reserved linux-arm64 folder, but an offline-AI payload for that RID is not bundled yet; desktop copies the shipped asset tree into the app output so supported targets stay offline."
 }
