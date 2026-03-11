@@ -11,13 +11,28 @@ namespace NiteChess.Desktop;
 
 public sealed class MainWindow : Window
 {
-    private static readonly IBrush LightSquareBrush = CreateBrush("#EEEED2");
+    private static readonly IBrush LightSquareBrush = CreateBrush("#E7EFD0");
     private static readonly IBrush DarkSquareBrush = CreateBrush("#769656");
-    private static readonly IBrush SelectedSquareBrush = CreateBrush("#F6F669");
-    private static readonly IBrush LegalTargetBrush = CreateBrush("#BACA44");
-    private static readonly IBrush WhitePieceBrush = CreateBrush("#F9FAFB");
+    private static readonly IBrush BoardFrameBrush = CreateBrush("#7C5A36");
+    private static readonly IBrush BoardFrameAccentBrush = CreateBrush("#D9C38A");
+    private static readonly IBrush BoardOutlineBrush = CreateBrush("#4B341C");
+    private static readonly IBrush SelectedSquareBrush = CreateBrush("#FFF2A8");
+    private static readonly IBrush SelectedSquareFillBrush = CreateBrush("#99FFF7C7");
+    private static readonly IBrush LegalTargetBrush = CreateBrush("#1F2937");
+    private static readonly IBrush LegalTargetFillBrush = CreateBrush("#551F2937");
+    private static readonly IBrush WhitePieceBrush = CreateBrush("#FFFDF5");
+    private static readonly IBrush WhitePieceShadowBrush = CreateBrush("#CC111111");
     private static readonly IBrush BlackPieceBrush = CreateBrush("#111827");
+    private static readonly IBrush BlackPieceShadowBrush = CreateBrush("#66FFF8DC");
     private static readonly IBrush MutedTextBrush = CreateBrush("#475569");
+    private static readonly IBrush SidebarCardBrush = CreateBrush("#0F172A");
+    private static readonly IBrush SidebarCardBorderBrush = CreateBrush("#334155");
+    private static readonly IBrush SidebarTextBrush = CreateBrush("#F8FAFC");
+    private static readonly IBrush SidebarMutedTextBrush = CreateBrush("#CBD5E1");
+    private static readonly IBrush SidebarInputBrush = CreateBrush("#111827");
+    private static readonly IBrush SidebarInputBorderBrush = CreateBrush("#475569");
+    private static readonly IBrush SidebarPrimaryButtonBrush = CreateBrush("#2563EB");
+    private static readonly IBrush SidebarPrimaryButtonBorderBrush = CreateBrush("#3B82F6");
 
     private readonly MainWindowViewModel _viewModel;
     private readonly GameplayController _gameplay;
@@ -83,7 +98,7 @@ public sealed class MainWindow : Window
             Orientation = Orientation.Horizontal,
             IsVisible = false
         };
-        _historyPanel = new StackPanel { Spacing = 4 };
+        _historyPanel = new StackPanel { Spacing = 6 };
         _saveBox = new TextBox
         {
             AcceptsReturn = true,
@@ -110,9 +125,17 @@ public sealed class MainWindow : Window
         _onlineRoomCodeBox.TextChanged += (_, _) => _gameplay.UpdateOnlineRoomCode(_onlineRoomCodeBox.Text);
         _onlinePlayerTokenBox = new TextBox { Watermark = "Reconnect token" };
         _onlinePlayerTokenBox.TextChanged += (_, _) => _gameplay.UpdateOnlinePlayerToken(_onlinePlayerTokenBox.Text);
-        _onlineConnectionBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
-        _onlinePlayersBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
-        _onlineRoleBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
+        _onlineConnectionBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = SidebarMutedTextBrush };
+        _onlinePlayersBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = SidebarMutedTextBrush };
+        _onlineRoleBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = SidebarMutedTextBrush };
+        StyleSidebarComboBox(_difficultyBox);
+        StyleSidebarComboBox(_humanColorBox);
+        StyleSidebarTextBox(_saveBox);
+        StyleSidebarTextBox(_onlineServerUrlBox);
+        StyleSidebarTextBox(_onlinePlayerNameBox);
+        StyleSidebarTextBox(_onlineRoomCodeBox);
+        StyleSidebarTextBox(_onlinePlayerTokenBox);
+        _runtimeBlock.Foreground = SidebarMutedTextBrush;
         _boardGrid = CreateBoardGrid();
 
         Content = BuildLayout();
@@ -134,9 +157,9 @@ public sealed class MainWindow : Window
             }
         };
 
-        var boardColumn = new StackPanel
+        var headerPanel = new StackPanel
         {
-            Spacing = 16,
+            Spacing = 8,
             Children =
             {
                 new TextBlock
@@ -145,43 +168,62 @@ public sealed class MainWindow : Window
                     FontSize = 28,
                     FontWeight = FontWeight.Bold
                 },
-                new TextBlock
-                {
-                    Text = _viewModel.Subtitle,
-                    TextWrapping = TextWrapping.Wrap,
-                    Foreground = MutedTextBrush
-                },
                 _modeBlock,
-                _statusBlock,
-                _messageBlock,
-                new Border
+                _statusBlock
+            }
+        };
+
+        var boardColumn = new Grid
+        {
+            RowSpacing = 14,
+            RowDefinitions = new RowDefinitions
+            {
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(new GridLength(1, GridUnitType.Star)),
+                new RowDefinition(GridLength.Auto)
+            }
+        };
+
+        Grid.SetRow(headerPanel, 0);
+        boardColumn.Children.Add(headerPanel);
+
+        var boardFrame = new Border
+        {
+            Background = BoardFrameBrush,
+            BorderBrush = BoardFrameAccentBrush,
+            BorderThickness = new Thickness(4),
+            CornerRadius = new CornerRadius(18),
+            Padding = new Thickness(18),
+            Child = new Viewbox
+            {
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Child = new Border
                 {
-                    Background = CreateBrush("#0F172A"),
-                    CornerRadius = new CornerRadius(16),
-                    Padding = new Thickness(16),
-                    Child = new Viewbox
-                    {
-                        Stretch = Stretch.Uniform,
-                        HorizontalAlignment = HorizontalAlignment.Left,
-                        Child = new Border
-                        {
-                            Width = 640,
-                            Height = 640,
-                            Child = _boardGrid
-                        }
-                    }
-                },
-                new StackPanel
-                {
-                    Spacing = 8,
-                    Children =
-                    {
-                        _promotionPrompt,
-                        _promotionPanel
-                    }
+                    Width = 640,
+                    Height = 640,
+                    Background = BoardOutlineBrush,
+                    BorderBrush = BoardFrameAccentBrush,
+                    BorderThickness = new Thickness(3),
+                    Child = _boardGrid
                 }
             }
         };
+        Grid.SetRow(boardFrame, 1);
+        boardColumn.Children.Add(boardFrame);
+
+        var promotionSection = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                _promotionPrompt,
+                _promotionPanel
+            }
+        };
+        Grid.SetRow(promotionSection, 2);
+        boardColumn.Children.Add(promotionSection);
         Grid.SetColumn(boardColumn, 0);
 
         var sidePanel = new StackPanel
@@ -211,14 +253,15 @@ public sealed class MainWindow : Window
     {
         var buttonRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
             Spacing = 8
         };
 
         var localButton = new Button { Content = "New local game" };
+        StyleSidebarButton(localButton);
         localButton.Click += async (_, _) => await _gameplay.StartLocalGameAsync();
 
         var aiButton = new Button { Content = "New AI game" };
+        StyleSidebarButton(aiButton);
         aiButton.Click += async (_, _) =>
         {
             var humanColor = _humanColorBox.SelectedItem is ChessColor color ? color : ChessColor.White;
@@ -227,12 +270,15 @@ public sealed class MainWindow : Window
         };
 
         var createRoomButton = new Button { Content = "Create room" };
+        StyleSidebarButton(createRoomButton);
         createRoomButton.Click += async (_, _) => await _gameplay.CreateOnlineGameAsync();
 
         var joinRoomButton = new Button { Content = "Join room" };
+        StyleSidebarButton(joinRoomButton);
         joinRoomButton.Click += async (_, _) => await _gameplay.JoinOnlineGameAsync();
 
         var resumeRoomButton = new Button { Content = "Resume room" };
+        StyleSidebarButton(resumeRoomButton);
         resumeRoomButton.Click += async (_, _) => await _gameplay.ResumeOnlineGameAsync();
 
         buttonRow.Children.Add(localButton);
@@ -240,110 +286,94 @@ public sealed class MainWindow : Window
 
         var onlineButtonRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
             Spacing = 8,
             Children = { createRoomButton, joinRoomButton, resumeRoomButton }
         };
 
-        return new Border
-        {
-            Background = CreateBrush("#F8FAFC"),
-            BorderBrush = CreateBrush("#CBD5E1"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(16),
-            Child = new StackPanel
+        return CreateSidebarCard(
+            new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    new TextBlock { Text = "Game setup", FontSize = 20, FontWeight = FontWeight.SemiBold },
-                    new TextBlock { Text = "AI difficulty" },
+                    CreateSidebarHeading("Game setup"),
+                    CreateSidebarLabel("AI difficulty"),
                     _difficultyBox,
-                    new TextBlock { Text = "Human plays" },
+                    CreateSidebarLabel("Human plays"),
                     _humanColorBox,
                     buttonRow,
                     _runtimeBlock,
-                    new Separator(),
-                    new TextBlock { Text = "Online multiplayer", FontSize = 20, FontWeight = FontWeight.SemiBold },
-                    new TextBlock { Text = "Backend URL" },
+                    CreateSidebarDivider(),
+                    CreateSidebarHeading("Online multiplayer"),
+                    CreateSidebarLabel("Backend URL"),
                     _onlineServerUrlBox,
-                    new TextBlock { Text = "Player name" },
+                    CreateSidebarLabel("Player name"),
                     _onlinePlayerNameBox,
-                    new TextBlock { Text = "Room code" },
+                    CreateSidebarLabel("Room code"),
                     _onlineRoomCodeBox,
-                    new TextBlock { Text = "Reconnect token" },
+                    CreateSidebarLabel("Reconnect token"),
                     _onlinePlayerTokenBox,
                     onlineButtonRow,
                     _onlineConnectionBlock,
                     _onlinePlayersBlock,
                     _onlineRoleBlock
                 }
-            }
-        };
+            });
     }
 
     private Control BuildHistorySection()
     {
-        return new Border
-        {
-            Background = CreateBrush("#F8FAFC"),
-            BorderBrush = CreateBrush("#CBD5E1"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(16),
-            Child = new StackPanel
+        return CreateSidebarCard(
+            new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    new TextBlock { Text = "Move history", FontSize = 20, FontWeight = FontWeight.SemiBold },
+                    CreateSidebarHeading("Move history"),
                     new ScrollViewer
                     {
                         MaxHeight = 220,
                         Content = _historyPanel
                     }
                 }
-            }
-        };
+            });
     }
 
     private Control BuildSaveSection()
     {
         var buttonRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
             Spacing = 8
         };
 
         var saveButton = new Button { Content = "Save snapshot" };
+        StyleSidebarButton(saveButton);
         saveButton.Click += (_, _) => _gameplay.SaveSnapshot();
 
         var loadButton = new Button { Content = "Load snapshot" };
+        StyleSidebarButton(loadButton);
         loadButton.Click += async (_, _) => await _gameplay.LoadSnapshotAsync(_saveBox.Text);
 
         buttonRow.Children.Add(saveButton);
         buttonRow.Children.Add(loadButton);
 
-        return new Border
-        {
-            Background = CreateBrush("#F8FAFC"),
-            BorderBrush = CreateBrush("#CBD5E1"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(16),
-            Child = new StackPanel
+        return CreateSidebarCard(
+            new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    new TextBlock { Text = "Save / load", FontSize = 20, FontWeight = FontWeight.SemiBold },
-                    new TextBlock { Text = "Use the snapshot box for manual save/load entry points.", TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush },
+                    CreateSidebarHeading("Save / load"),
+                    new TextBlock
+                    {
+                        Text = "Use the snapshot box for manual save/load entry points.",
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = SidebarMutedTextBrush
+                    },
                     buttonRow,
                     _saveBox
                 }
-            }
-        };
+            });
     }
 
     private Grid CreateBoardGrid()
@@ -428,21 +458,101 @@ public sealed class MainWindow : Window
 
         foreach (var square in state.BoardSquares)
         {
-            var button = new Button
-            {
-                Content = square.PieceGlyph,
-                FontSize = 38,
-                FontWeight = FontWeight.Bold,
-                Padding = new Thickness(0),
-                Background = ResolveSquareBrush(square),
-                Foreground = square.Piece?.Color == ChessColor.White ? WhitePieceBrush : BlackPieceBrush,
-                IsEnabled = state.CanInteractWithBoard
-            };
-            button.Click += async (_, _) => await _gameplay.SelectSquareAsync(square.Position);
+            var squareContent = new Grid { IsHitTestVisible = false };
 
-            Grid.SetRow(button, square.DisplayRow);
-            Grid.SetColumn(button, square.DisplayColumn);
-            _boardGrid.Children.Add(button);
+            if (square.IsSelected)
+            {
+                squareContent.Children.Add(new Border
+                {
+                    Background = SelectedSquareFillBrush,
+                    Margin = new Thickness(2),
+                    CornerRadius = new CornerRadius(8),
+                    IsHitTestVisible = false
+                });
+            }
+
+            if (square.IsLegalDestination)
+            {
+                squareContent.Children.Add(square.Piece is null
+                    ? new Border
+                    {
+                        Width = 18,
+                        Height = 18,
+                        Background = LegalTargetFillBrush,
+                        CornerRadius = new CornerRadius(9),
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        IsHitTestVisible = false
+                    }
+                    : new Border
+                    {
+                        BorderBrush = LegalTargetBrush,
+                        BorderThickness = new Thickness(4),
+                        Margin = new Thickness(8),
+                        CornerRadius = new CornerRadius(8),
+                        IsHitTestVisible = false
+                    });
+            }
+
+            if (square.IsSelected)
+            {
+                squareContent.Children.Add(new Border
+                {
+                    BorderBrush = SelectedSquareBrush,
+                    BorderThickness = new Thickness(4),
+                    Margin = new Thickness(3),
+                    CornerRadius = new CornerRadius(8),
+                    IsHitTestVisible = false
+                });
+            }
+
+            if (square.Piece is ChessPiece piece)
+            {
+                if (piece.Color == ChessColor.White)
+                {
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), -1.5, 0);
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), 1.5, 0);
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), 0, -1.5);
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), 0, 1.5);
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), -1.2, -1.2);
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), 1.2, -1.2);
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), -1.2, 1.2);
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), 1.2, 1.2);
+                }
+                else
+                {
+                    AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceShadowBrush(piece.Color), 1.4, 1.4);
+                }
+
+                AddPieceGlyphLayer(squareContent, square.PieceGlyph, ResolvePieceBrush(piece.Color));
+            }
+
+            var squareButton = new Button
+            {
+                Background = ResolveSquareBrush(square),
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Stretch,
+                Content = squareContent,
+                IsHitTestVisible = state.CanInteractWithBoard
+            };
+            squareButton.Click += async (_, _) =>
+            {
+                if (!state.CanInteractWithBoard)
+                {
+                    return;
+                }
+
+                await _gameplay.SelectSquareAsync(square.Position);
+            };
+
+            Grid.SetRow(squareButton, square.DisplayRow);
+            Grid.SetColumn(squareButton, square.DisplayColumn);
+            _boardGrid.Children.Add(squareButton);
         }
     }
 
@@ -455,14 +565,19 @@ public sealed class MainWindow : Window
             _historyPanel.Children.Add(new TextBlock
             {
                 Text = "No moves yet.",
-                Foreground = MutedTextBrush
+                Foreground = SidebarMutedTextBrush
             });
             return;
         }
 
         foreach (var entry in state.MoveHistory)
         {
-            _historyPanel.Children.Add(new TextBlock { Text = entry });
+            _historyPanel.Children.Add(new TextBlock
+            {
+                Text = entry,
+                Foreground = SidebarTextBrush,
+                TextWrapping = TextWrapping.Wrap
+            });
         }
     }
 
@@ -489,17 +604,123 @@ public sealed class MainWindow : Window
 
     private static IBrush ResolveSquareBrush(ChessBoardSquareViewState square)
     {
-        if (square.IsSelected)
-        {
-            return SelectedSquareBrush;
-        }
-
-        if (square.IsLegalDestination)
-        {
-            return LegalTargetBrush;
-        }
-
         return square.IsLightSquare ? LightSquareBrush : DarkSquareBrush;
+    }
+
+    private static IBrush ResolvePieceBrush(ChessColor pieceColor)
+    {
+        return pieceColor switch
+        {
+            ChessColor.White => WhitePieceBrush,
+            ChessColor.Black => BlackPieceBrush,
+            _ => Brushes.Transparent
+        };
+    }
+
+    private static IBrush ResolvePieceShadowBrush(ChessColor pieceColor)
+    {
+        return pieceColor switch
+        {
+            ChessColor.White => WhitePieceShadowBrush,
+            ChessColor.Black => BlackPieceShadowBrush,
+            _ => Brushes.Transparent
+        };
+    }
+
+    private static void AddPieceGlyphLayer(Panel container, string glyph, IBrush brush, double offsetX = 0, double offsetY = 0)
+    {
+        var textBlock = new TextBlock
+        {
+            Text = glyph,
+            FontSize = 46,
+            FontWeight = FontWeight.Bold,
+            Foreground = brush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            IsHitTestVisible = false
+        };
+
+        if (Math.Abs(offsetX) > double.Epsilon || Math.Abs(offsetY) > double.Epsilon)
+        {
+            textBlock.RenderTransform = new TranslateTransform(offsetX, offsetY);
+        }
+
+        container.Children.Add(textBlock);
+    }
+
+    private static Border CreateSidebarCard(Control content)
+    {
+        return new Border
+        {
+            Background = SidebarCardBrush,
+            BorderBrush = SidebarCardBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(16),
+            Child = content
+        };
+    }
+
+    private static Border CreateSidebarDivider()
+    {
+        return new Border
+        {
+            Height = 1,
+            Background = SidebarCardBorderBrush,
+            Margin = new Thickness(0, 4)
+        };
+    }
+
+    private static TextBlock CreateSidebarHeading(string text)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            FontSize = 20,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = SidebarTextBrush
+        };
+    }
+
+    private static TextBlock CreateSidebarLabel(string text)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = SidebarMutedTextBrush
+        };
+    }
+
+    private static void StyleSidebarTextBox(TextBox textBox)
+    {
+        textBox.Background = SidebarInputBrush;
+        textBox.Foreground = SidebarTextBrush;
+        textBox.BorderBrush = SidebarInputBorderBrush;
+        textBox.BorderThickness = new Thickness(1);
+        textBox.Padding = new Thickness(12, 10);
+        textBox.MinHeight = Math.Max(textBox.MinHeight, 40);
+    }
+
+    private static void StyleSidebarComboBox(ComboBox comboBox)
+    {
+        comboBox.Background = SidebarInputBrush;
+        comboBox.Foreground = SidebarTextBrush;
+        comboBox.BorderBrush = SidebarInputBorderBrush;
+        comboBox.BorderThickness = new Thickness(1);
+        comboBox.MinHeight = Math.Max(comboBox.MinHeight, 40);
+    }
+
+    private static void StyleSidebarButton(Button button)
+    {
+        button.Background = SidebarPrimaryButtonBrush;
+        button.Foreground = SidebarTextBrush;
+        button.BorderBrush = SidebarPrimaryButtonBorderBrush;
+        button.BorderThickness = new Thickness(1);
+        button.Padding = new Thickness(12, 10);
+        button.MinHeight = 40;
+        button.HorizontalAlignment = HorizontalAlignment.Stretch;
     }
 
     private static IBrush CreateBrush(string hex)
