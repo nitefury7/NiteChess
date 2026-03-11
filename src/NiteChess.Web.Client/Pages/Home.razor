@@ -10,12 +10,12 @@
         <div>
             <p class="eyebrow">NiteChess Web</p>
             <h1>Browser gameplay</h1>
-            <p class="hero-copy">Play local chess or challenge the bundled offline Stockfish engine directly in the Blazor WebAssembly client.</p>
+            <p class="hero-copy">Play locally, challenge the bundled offline Stockfish engine, or connect to an ASP.NET Core + SignalR multiplayer room from the browser client.</p>
         </div>
         <div class="hero-meta">
             <span>@Manifest.Platform.Surface</span>
             <span>@Manifest.Stockfish.IntegrationMode</span>
-            <span>Offline AI: @(Manifest.Platform.SupportsOfflineAi ? "Yes" : "No")</span>
+            <span>Online play: @(Manifest.Platform.SupportsOnlinePlay ? "Yes" : "No")</span>
         </div>
     </section>
 
@@ -50,7 +50,7 @@
                 <div class="promotion-actions">
                     @foreach (var pieceType in State.PendingPromotionChoices)
                     {
-                        <button class="secondary-button" type="button" disabled="@State.IsBusy" @onclick="() => ChoosePromotionAsync(pieceType)">
+                        <button class="secondary-button" type="button" disabled="@(!State.CanChoosePromotion)" @onclick="() => ChoosePromotionAsync(pieceType)">
                             Promote to @pieceType
                         </button>
                     }
@@ -90,6 +90,43 @@
             </section>
 
             <section class="panel">
+                <h3>Online multiplayer</h3>
+                <p class="support-copy">Point the browser client at the SignalR backend, then create a room, join a shared room code, or resume with the reconnect token issued when you first connected.</p>
+
+                <div class="form-grid">
+                    <label>
+                        <span>Backend URL</span>
+                        <input value="@State.OnlinePlay.ServerUrl" @oninput="OnOnlineServerUrlInput" placeholder="https://localhost:5001" />
+                    </label>
+                    <label>
+                        <span>Player name</span>
+                        <input value="@State.OnlinePlay.PlayerName" @oninput="OnOnlinePlayerNameInput" placeholder="Player name" />
+                    </label>
+                    <label>
+                        <span>Room code</span>
+                        <input value="@State.OnlinePlay.RoomCode" @oninput="OnOnlineRoomCodeInput" placeholder="ABC123" />
+                    </label>
+                    <label>
+                        <span>Reconnect token</span>
+                        <input value="@State.OnlinePlay.PlayerToken" @oninput="OnOnlinePlayerTokenInput" placeholder="Issued after create/join" />
+                    </label>
+                </div>
+
+                <div class="button-row">
+                    <button class="primary-button" type="button" disabled="@State.IsBusy" @onclick="CreateOnlineGameAsync">Create room</button>
+                    <button class="secondary-button" type="button" disabled="@State.IsBusy" @onclick="JoinOnlineGameAsync">Join room</button>
+                    <button class="secondary-button" type="button" disabled="@State.IsBusy" @onclick="ResumeOnlineGameAsync">Resume room</button>
+                </div>
+
+                <p class="support-copy"><strong>Connection:</strong> @State.OnlinePlay.ConnectionSummary</p>
+                <p class="support-copy"><strong>Players:</strong> @State.OnlinePlay.SeatSummary</p>
+                @if (State.OnlinePlay.PlayerColor is ChessColor playerColor)
+                {
+                    <p class="support-copy"><strong>You are:</strong> @FormatColor(playerColor)</p>
+                }
+            </section>
+
+            <section class="panel">
                 <h3>Move history</h3>
                 @if (State.MoveHistory.Count == 0)
                 {
@@ -121,9 +158,9 @@
             </section>
 
             <section class="panel panel-accent">
-                <h3>Offline expectations</h3>
-                <p>Once the browser has loaded the app bundle plus the Stockfish worker/WASM assets, local play and AI turns continue without server round-trips.</p>
-                <p class="support-copy">Multiplayer is intentionally out of scope for this milestone and remains a future backend/client integration task.</p>
+                <h3>Hosted expectations</h3>
+                <p>Offline AI still runs entirely inside the browser once the app and Stockfish assets are loaded.</p>
+                <p class="support-copy">Online play uses a separate authoritative ASP.NET Core + SignalR backend URL, so browser clients can share a room while move legality stays validated on the server.</p>
             </section>
         </aside>
     </div>
@@ -135,7 +172,7 @@
 
     private GameplayViewState State => Gameplay.State;
 
-    private bool IsBoardDisabled => State.IsBusy || State.HasPendingPromotion || State.IsComputerTurn;
+    private bool IsBoardDisabled => !State.CanInteractWithBoard;
 
     protected override void OnInitialized()
     {
@@ -167,40 +204,33 @@
         }
     }
 
-    private Task StartLocalGameAsync()
-    {
-        return Gameplay.StartLocalGameAsync().AsTask();
-    }
+    private Task StartLocalGameAsync() => Gameplay.StartLocalGameAsync().AsTask();
 
-    private Task StartComputerGameAsync()
-    {
-        return Gameplay.StartComputerGameAsync(_selectedHumanColor, _selectedDifficulty).AsTask();
-    }
+    private Task StartComputerGameAsync() => Gameplay.StartComputerGameAsync(_selectedHumanColor, _selectedDifficulty).AsTask();
 
-    private Task SelectSquareAsync(ChessPosition position)
-    {
-        return Gameplay.SelectSquareAsync(position).AsTask();
-    }
+    private Task CreateOnlineGameAsync() => Gameplay.CreateOnlineGameAsync().AsTask();
 
-    private Task ChoosePromotionAsync(PieceType pieceType)
-    {
-        return Gameplay.ChoosePromotionAsync(pieceType).AsTask();
-    }
+    private Task JoinOnlineGameAsync() => Gameplay.JoinOnlineGameAsync().AsTask();
 
-    private void SaveSnapshot()
-    {
-        Gameplay.SaveSnapshot();
-    }
+    private Task ResumeOnlineGameAsync() => Gameplay.ResumeOnlineGameAsync().AsTask();
 
-    private Task LoadSnapshotAsync()
-    {
-        return Gameplay.LoadSnapshotAsync(State.SaveDraft).AsTask();
-    }
+    private Task SelectSquareAsync(ChessPosition position) => Gameplay.SelectSquareAsync(position).AsTask();
 
-    private void OnSnapshotInput(ChangeEventArgs args)
-    {
-        Gameplay.UpdateSaveDraft(args.Value?.ToString());
-    }
+    private Task ChoosePromotionAsync(PieceType pieceType) => Gameplay.ChoosePromotionAsync(pieceType).AsTask();
+
+    private void SaveSnapshot() => Gameplay.SaveSnapshot();
+
+    private Task LoadSnapshotAsync() => Gameplay.LoadSnapshotAsync(State.SaveDraft).AsTask();
+
+    private void OnSnapshotInput(ChangeEventArgs args) => Gameplay.UpdateSaveDraft(args.Value?.ToString());
+
+    private void OnOnlineServerUrlInput(ChangeEventArgs args) => Gameplay.UpdateOnlineServerUrl(args.Value?.ToString());
+
+    private void OnOnlinePlayerNameInput(ChangeEventArgs args) => Gameplay.UpdateOnlinePlayerName(args.Value?.ToString());
+
+    private void OnOnlineRoomCodeInput(ChangeEventArgs args) => Gameplay.UpdateOnlineRoomCode(args.Value?.ToString());
+
+    private void OnOnlinePlayerTokenInput(ChangeEventArgs args) => Gameplay.UpdateOnlinePlayerToken(args.Value?.ToString());
 
     private static string GetSquareClasses(ChessBoardSquareViewState square)
     {
@@ -231,8 +261,5 @@
             : $"{square.Position}: empty";
     }
 
-    private static string FormatColor(ChessColor color)
-    {
-        return color == ChessColor.White ? "White" : "Black";
-    }
+    private static string FormatColor(ChessColor color) => color == ChessColor.White ? "White" : "Black";
 }

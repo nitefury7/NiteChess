@@ -1,7 +1,10 @@
 using NiteChess.Application.ComputerPlay;
 using NiteChess.Application.Gameplay;
 using NiteChess.Application.GameSessions;
+using NiteChess.Backend.Services;
 using NiteChess.Domain.Chess;
+using NiteChess.Online;
+using NiteChess.Online.Contracts;
 using NiteChess.Stockfish;
 using NiteChess.Stockfish.Abstractions;
 
@@ -31,7 +34,9 @@ var scenarios = new (string Name, Action Execute)[]
     ("Gameplay controller applies click-to-move turns", GameplayControllerAppliesClickToMoveTurns),
     ("Gameplay controller saves and loads snapshot drafts", GameplayControllerSavesAndLoadsSnapshotDrafts),
     ("Gameplay controller reports invalid manual snapshot loads", GameplayControllerReportsInvalidManualSnapshotLoads),
-    ("Gameplay controller can open with the AI move when human plays black", GameplayControllerStartsAiGameAndRequestsOpeningMove)
+    ("Gameplay controller can open with the AI move when human plays black", GameplayControllerStartsAiGameAndRequestsOpeningMove),
+    ("Online room service coordinates players and validates turns", OnlineRoomServiceCoordinatesPlayersAndValidatesTurns),
+    ("Gameplay controller hydrates authoritative online snapshots", GameplayControllerHydratesAuthoritativeOnlineSnapshots)
 };
 
 var failures = new List<string>();
@@ -554,6 +559,69 @@ static void GameplayControllerStartsAiGameAndRequestsOpeningMove()
     Assert.Equal(ChessColor.Black, controller.State.BoardPerspective, "Playing as Black should flip the board perspective.");
 }
 
+static void OnlineRoomServiceCoordinatesPlayersAndValidatesTurns()
+{
+    var persistence = new GameSessionPersistenceService();
+    var roomService = new OnlineGameRoomService(new GameSessionService(), persistence);
+
+    var white = roomService.CreateRoom("conn-white", "Alice");
+    Assert.Equal(ChessColor.White, white.PlayerColor, "The room creator should be assigned White.");
+    Assert.True(white.RoomState.IsAwaitingOpponent, "A newly created room should wait for Black to join.");
+
+    var blocked = roomService.SubmitMove("conn-white", "e2", "e4");
+    Assert.False(blocked.Accepted, "Moves should be rejected until both seats are occupied.");
+
+    var black = roomService.JoinRoom("conn-black", white.RoomCode, "Bob");
+    Assert.Equal(ChessColor.Black, black.PlayerColor, "The second player should be assigned Black.");
+    Assert.False(black.RoomState.IsAwaitingOpponent, "Joining should make the room immediately playable.");
+
+    var whiteMove = roomService.SubmitMove("conn-white", "e2", "e4");
+    Assert.True(whiteMove.Accepted, "White should be able to submit the opening move once the room is full.");
+    var whiteMovedSession = persistence.Load(whiteMove.RoomState.SessionSnapshot);
+    Assert.Equal(new ChessPiece(ChessColor.White, PieceType.Pawn), whiteMovedSession.Game.Board[ChessPosition.Parse("e4")], "The authoritative room snapshot should include White's applied pawn move.");
+
+    var whiteOutOfTurn = roomService.SubmitMove("conn-white", "d2", "d4");
+    Assert.False(whiteOutOfTurn.Accepted, "The same player should not be able to move twice in a row.");
+
+    var resumedBlack = roomService.ResumeRoom("conn-black-resumed", white.RoomCode, black.PlayerToken);
+    Assert.Equal(ChessColor.Black, resumedBlack.PlayerColor, "Reconnect should restore the original player seat.");
+
+    var blackMove = roomService.SubmitMove("conn-black-resumed", "e7", "e5");
+    Assert.True(blackMove.Accepted, "Black should be able to move after reconnecting with the resume token.");
+    var blackMovedSession = persistence.Load(blackMove.RoomState.SessionSnapshot);
+    Assert.Equal(new ChessPiece(ChessColor.Black, PieceType.Pawn), blackMovedSession.Game.Board[ChessPosition.Parse("e5")], "The resumed room should continue advancing authoritative state.");
+}
+
+static void GameplayControllerHydratesAuthoritativeOnlineSnapshots()
+{
+    var onlineClient = new TestOnlineGameClient();
+    var controller = CreateGameplayController(onlineGameClient: onlineClient);
+
+    controller.UpdateOnlineServerUrl("https://localhost:5001");
+    controller.UpdateOnlinePlayerName("Alice");
+    GetTask(controller.CreateOnlineGameAsync());
+
+    Assert.True(controller.State.OnlinePlay.IsOnlineGame, "Creating an online room should switch the controller into online mode.");
+    Assert.Equal(ChessColor.White, controller.State.OnlinePlay.PlayerColor, "The fake online client should seat the local player as White.");
+    Assert.Equal("ABC123", controller.State.OnlinePlay.RoomCode, "The issued room code should surface through gameplay state.");
+    Assert.True(controller.State.CanInteractWithBoard, "White should be able to act immediately when the room snapshot is ready.");
+
+    GetTask(controller.SelectSquareAsync(ChessPosition.Parse("e2")));
+    GetTask(controller.SelectSquareAsync(ChessPosition.Parse("e4")));
+
+    Assert.Equal("e2", onlineClient.LastMoveFrom, "Online move submission should preserve the selected source square.");
+    Assert.Equal("e4", onlineClient.LastMoveTo, "Online move submission should preserve the selected target square.");
+    var movedPawn = controller.State.BoardSquares.Single(square => square.Position == ChessPosition.Parse("e4"));
+    Assert.Equal(new ChessPiece(ChessColor.White, PieceType.Pawn), movedPawn.Piece, "The controller should redraw from the authoritative online snapshot after White's move.");
+
+    onlineClient.PushServerMove(ChessMove.Parse("e7e5"), "Bob replied with e7e5. White to move.");
+
+    var blackPawn = controller.State.BoardSquares.Single(square => square.Position == ChessPosition.Parse("e5"));
+    Assert.Equal(new ChessPiece(ChessColor.Black, PieceType.Pawn), blackPawn.Piece, "Broadcast snapshots should hydrate remote opponent moves into the controller state.");
+    Assert.Equal(2, controller.State.MoveHistory.Count, "Online snapshot hydration should preserve synchronized move history.");
+    Assert.Equal("White: Alice · Black: Bob", controller.State.OnlinePlay.SeatSummary, "Online seat metadata should remain visible to the shared UI layers.");
+}
+
 static ChessGame CreateGame(
     ChessColor sideToMove,
     CastlingRights castlingRights,
@@ -581,13 +649,15 @@ static void GetTask(ValueTask task)
 
 static GameplayController CreateGameplayController(
     IComputerMoveService? computerMoveService = null,
-    TestRuntimeBootstrapper? runtimeBootstrapper = null)
+    TestRuntimeBootstrapper? runtimeBootstrapper = null,
+    IOnlineGameClient? onlineGameClient = null)
 {
     return new GameplayController(
         new GameSessionService(),
         new GameSessionPersistenceService(),
         computerMoveService ?? new ScriptedComputerMoveService(ChessMove.Parse("e7e5")),
-        runtimeBootstrapper ?? new TestRuntimeBootstrapper());
+        runtimeBootstrapper ?? new TestRuntimeBootstrapper(),
+        onlineGameClient ?? new DisabledOnlineGameClient());
 }
 
 static string CreateFakeNativeStockfishRuntime()
@@ -777,6 +847,98 @@ sealed class TestRuntimeBootstrapper : IStockfishRuntimeBootstrapper
         cancellationToken.ThrowIfCancellationRequested();
         WarmUpCallCount++;
         return ValueTask.CompletedTask;
+    }
+}
+
+sealed class TestOnlineGameClient : IOnlineGameClient
+{
+    private readonly GameSessionService _sessionService = new();
+    private readonly GameSessionPersistenceService _persistenceService = new();
+    private LocalGameSession _session;
+
+    public TestOnlineGameClient()
+    {
+        _session = _sessionService.CreateSession();
+    }
+
+    public event Action<OnlineGameRoomState>? RoomStateChanged;
+
+    public event Action<OnlineConnectionStatus>? ConnectionStatusChanged;
+
+    public string? LastMoveFrom { get; private set; }
+
+    public string? LastMoveTo { get; private set; }
+
+    public ValueTask<OnlineRoomConnectionResult> CreateRoomAsync(Uri serverUri, string playerName, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _session = _sessionService.CreateSession();
+        ConnectionStatusChanged?.Invoke(new OnlineConnectionStatus($"Connected to {serverUri}. Auto-reconnect is enabled.", true, false));
+        return ValueTask.FromResult(new OnlineRoomConnectionResult(
+            "ABC123",
+            "token-alice",
+            playerName,
+            ChessColor.White,
+            BuildRoomState(playerName, "Bob", "Room ready. White to move.")));
+    }
+
+    public ValueTask<OnlineRoomConnectionResult> JoinRoomAsync(Uri serverUri, string roomCode, string playerName, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Join is not needed in this scenario.");
+    }
+
+    public ValueTask<OnlineRoomConnectionResult> ResumeRoomAsync(Uri serverUri, string roomCode, string playerToken, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Resume is not needed in this scenario.");
+    }
+
+    public ValueTask<OnlineGameActionResult> SubmitMoveAsync(string from, string to, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        LastMoveFrom = from;
+        LastMoveTo = to;
+
+        var result = _sessionService.SubmitMove(_session, ChessPosition.Parse(from), ChessPosition.Parse(to));
+        _session = result.Session;
+        if (result.Outcome is not (GameSessionMoveOutcome.Applied or GameSessionMoveOutcome.PromotionSelectionRequired))
+        {
+            return ValueTask.FromResult(new OnlineGameActionResult(false, result.RejectionReason ?? "Move rejected.", BuildRoomState("Alice", "Bob", result.RejectionReason ?? "Move rejected.")));
+        }
+
+        return ValueTask.FromResult(new OnlineGameActionResult(
+            true,
+            "Alice played e2e4. Black to move.",
+            BuildRoomState("Alice", "Bob", "Alice played e2e4. Black to move.")));
+    }
+
+    public ValueTask<OnlineGameActionResult> CompletePromotionAsync(PieceType promotionPieceType, CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Promotion is not needed in this scenario.");
+    }
+
+    public ValueTask DisconnectAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ConnectionStatusChanged?.Invoke(new OnlineConnectionStatus("Not connected.", false, false));
+        return ValueTask.CompletedTask;
+    }
+
+    public void PushServerMove(ChessMove move, string message)
+    {
+        _session = _sessionService.SubmitMove(_session, move).Session;
+        RoomStateChanged?.Invoke(BuildRoomState("Alice", "Bob", message));
+    }
+
+    private OnlineGameRoomState BuildRoomState(string whitePlayerName, string blackPlayerName, string statusMessage)
+    {
+        return new OnlineGameRoomState(
+            "ABC123",
+            _persistenceService.Save(_session),
+            whitePlayerName,
+            blackPlayerName,
+            false,
+            statusMessage,
+            DateTimeOffset.UtcNow);
     }
 }
 

@@ -8,7 +8,7 @@ public sealed class MainWindowViewModel
     public MainWindowViewModel(NiteChessBootstrapManifest manifest, GameplayController gameplay)
     {
         Title = "NiteChess Desktop";
-        Subtitle = $"{manifest.Platform.Surface} board play, history, save/load, and offline AI.";
+        Subtitle = $"{manifest.Platform.Surface} board play with local, offline AI, and online SignalR multiplayer support.";
         Gameplay = gameplay ?? throw new ArgumentNullException(nameof(gameplay));
     }
 

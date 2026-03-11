@@ -1,6 +1,7 @@
 using NiteChess.Application.Configuration;
 using NiteChess.Application.DependencyInjection;
 using NiteChess.Application.Gameplay;
+using NiteChess.Online;
 using NiteChess.Stockfish.Abstractions;
 using NiteChess.Web.Client.Services;
 
@@ -23,6 +24,7 @@ builder.Services.AddNiteChessApplication(
         Notes: "Bundle manifest ships at wwwroot/stockfish/web-stockfish.bundle.json and resolves the Stockfish 18 worker plus WASM assets for offline browser play."));
 builder.Services.AddSingleton<IStockfishRuntimeBootstrapper, BrowserWorkerStockfishRuntimeBootstrapper>();
 builder.Services.AddSingleton<IStockfishEngineClient, BrowserWorkerStockfishEngineClient>();
+builder.Services.AddSingleton<IOnlineGameClient, SignalROnlineGameClient>();
 builder.Services.AddSingleton<GameplayController>();
 
 await builder.Build().RunAsync();

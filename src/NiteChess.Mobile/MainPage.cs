@@ -21,6 +21,13 @@ public sealed class MainPage : ContentPage
     private readonly Picker _difficultyPicker;
     private readonly Picker _humanColorPicker;
     private readonly Frame _boardFrame;
+    private readonly Entry _onlineServerUrlEntry;
+    private readonly Entry _onlinePlayerNameEntry;
+    private readonly Entry _onlineRoomCodeEntry;
+    private readonly Entry _onlinePlayerTokenEntry;
+    private readonly Label _onlineConnectionLabel;
+    private readonly Label _onlinePlayersLabel;
+    private readonly Label _onlineRoleLabel;
 
     public MainPage(NiteChessBootstrapManifest manifest, GameplayController gameplay)
     {
@@ -67,6 +74,17 @@ public sealed class MainPage : ContentPage
             ItemsSource = _gameplay.AvailableHumanColors.ToList(),
             SelectedItem = ChessColor.White
         };
+        _onlineServerUrlEntry = new Entry { Placeholder = "https://localhost:5001" };
+        _onlineServerUrlEntry.TextChanged += (_, args) => _gameplay.UpdateOnlineServerUrl(args.NewTextValue);
+        _onlinePlayerNameEntry = new Entry { Placeholder = "Player name" };
+        _onlinePlayerNameEntry.TextChanged += (_, args) => _gameplay.UpdateOnlinePlayerName(args.NewTextValue);
+        _onlineRoomCodeEntry = new Entry { Placeholder = "ABC123" };
+        _onlineRoomCodeEntry.TextChanged += (_, args) => _gameplay.UpdateOnlineRoomCode(args.NewTextValue);
+        _onlinePlayerTokenEntry = new Entry { Placeholder = "Reconnect token" };
+        _onlinePlayerTokenEntry.TextChanged += (_, args) => _gameplay.UpdateOnlinePlayerToken(args.NewTextValue);
+        _onlineConnectionLabel = CreateSecondaryLabel();
+        _onlinePlayersLabel = CreateSecondaryLabel();
+        _onlineRoleLabel = CreateSecondaryLabel();
         _boardGrid = CreateBoardGrid();
         _boardFrame = new Frame
         {
@@ -95,7 +113,7 @@ public sealed class MainPage : ContentPage
                     },
                     new Label
                     {
-                        Text = $"{manifest.Platform.Surface} board play, history, save/load, and offline AI.",
+                        Text = $"{manifest.Platform.Surface} board play, history, save/load, offline AI, and online SignalR multiplayer.",
                         LineBreakMode = LineBreakMode.WordWrap,
                         TextColor = Color.FromArgb("#475569")
                     },
@@ -113,6 +131,7 @@ public sealed class MainPage : ContentPage
                         }
                     },
                     CreateSetupCard(),
+                    CreateOnlineCard(),
                     CreateHistoryCard(),
                     CreateSaveCard(),
                     _runtimeLabel
@@ -172,6 +191,44 @@ public sealed class MainPage : ContentPage
         });
     }
 
+    private View CreateOnlineCard()
+    {
+        var createRoomButton = new Button { Text = "Create room" };
+        createRoomButton.Clicked += async (_, _) => await _gameplay.CreateOnlineGameAsync();
+
+        var joinRoomButton = new Button { Text = "Join room" };
+        joinRoomButton.Clicked += async (_, _) => await _gameplay.JoinOnlineGameAsync();
+
+        var resumeRoomButton = new Button { Text = "Resume room" };
+        resumeRoomButton.Clicked += async (_, _) => await _gameplay.ResumeOnlineGameAsync();
+
+        return CreateCard(new VerticalStackLayout
+        {
+            Spacing = 10,
+            Children =
+            {
+                CreateSectionHeader("Online multiplayer"),
+                CreateSecondaryLabel("Connect to the SignalR backend, then create, join, or resume a room using the reconnect token."),
+                new Label { Text = "Backend URL" },
+                _onlineServerUrlEntry,
+                new Label { Text = "Player name" },
+                _onlinePlayerNameEntry,
+                new Label { Text = "Room code" },
+                _onlineRoomCodeEntry,
+                new Label { Text = "Reconnect token" },
+                _onlinePlayerTokenEntry,
+                new HorizontalStackLayout
+                {
+                    Spacing = 8,
+                    Children = { createRoomButton, joinRoomButton, resumeRoomButton }
+                },
+                _onlineConnectionLabel,
+                _onlinePlayersLabel,
+                _onlineRoleLabel
+            }
+        });
+    }
+
     private View CreateSaveCard()
     {
         var saveButton = new Button { Text = "Save snapshot" };
@@ -223,10 +280,35 @@ public sealed class MainPage : ContentPage
         _runtimeLabel.Text = state.AiRuntimeSummary;
         _promotionPrompt.Text = state.PendingPromotionPrompt;
         _promotionChoices.IsVisible = state.HasPendingPromotion;
+        _onlineConnectionLabel.Text = $"Connection: {state.OnlinePlay.ConnectionSummary}";
+        _onlinePlayersLabel.Text = $"Players: {state.OnlinePlay.SeatSummary}";
+        _onlineRoleLabel.Text = state.OnlinePlay.PlayerColor is ChessColor playerColor
+            ? $"You are: {FormatColor(playerColor)}"
+            : string.Empty;
 
         if (!string.Equals(_saveEditor.Text, state.SaveDraft, StringComparison.Ordinal))
         {
             _saveEditor.Text = state.SaveDraft;
+        }
+
+        if (!string.Equals(_onlineServerUrlEntry.Text, state.OnlinePlay.ServerUrl, StringComparison.Ordinal))
+        {
+            _onlineServerUrlEntry.Text = state.OnlinePlay.ServerUrl;
+        }
+
+        if (!string.Equals(_onlinePlayerNameEntry.Text, state.OnlinePlay.PlayerName, StringComparison.Ordinal))
+        {
+            _onlinePlayerNameEntry.Text = state.OnlinePlay.PlayerName;
+        }
+
+        if (!string.Equals(_onlineRoomCodeEntry.Text, state.OnlinePlay.RoomCode, StringComparison.Ordinal))
+        {
+            _onlineRoomCodeEntry.Text = state.OnlinePlay.RoomCode;
+        }
+
+        if (!string.Equals(_onlinePlayerTokenEntry.Text, state.OnlinePlay.PlayerToken, StringComparison.Ordinal))
+        {
+            _onlinePlayerTokenEntry.Text = state.OnlinePlay.PlayerToken;
         }
 
         if (_difficultyPicker.SelectedItem is not AiDifficulty selectedDifficulty || selectedDifficulty != state.SelectedDifficulty)
@@ -264,7 +346,7 @@ public sealed class MainPage : ContentPage
                 Padding = 0,
                 BackgroundColor = ResolveSquareColor(square),
                 TextColor = square.Piece?.Color == ChessColor.White ? Color.FromArgb("#F9FAFB") : Color.FromArgb("#111827"),
-                IsEnabled = !state.IsBusy && !state.HasPendingPromotion && !state.IsComputerTurn
+                IsEnabled = state.CanInteractWithBoard
             };
             button.Clicked += async (_, _) => await _gameplay.SelectSquareAsync(square.Position);
 
@@ -299,7 +381,7 @@ public sealed class MainPage : ContentPage
             var button = new Button
             {
                 Text = pieceType.ToString(),
-                IsEnabled = !state.IsBusy
+                IsEnabled = state.CanChoosePromotion
             };
             button.Clicked += async (_, _) => await _gameplay.ChoosePromotionAsync(pieceType);
             _promotionChoices.Children.Add(button);
@@ -352,6 +434,11 @@ public sealed class MainPage : ContentPage
             TextColor = Color.FromArgb("#475569"),
             LineBreakMode = LineBreakMode.WordWrap
         };
+    }
+
+    private static string FormatColor(ChessColor color)
+    {
+        return color == ChessColor.White ? "White" : "Black";
     }
 
     private static View CreateCard(View content)

@@ -1,6 +1,8 @@
 using NiteChess.Application.ComputerPlay;
 using NiteChess.Application.GameSessions;
 using NiteChess.Domain.Chess;
+using NiteChess.Online;
+using NiteChess.Online.Contracts;
 using NiteChess.Stockfish.Abstractions;
 
 namespace NiteChess.Application.Gameplay;
@@ -14,6 +16,7 @@ public sealed class GameplayController
     private readonly IGameSessionPersistenceService _persistenceService;
     private readonly IComputerMoveService _computerMoveService;
     private readonly IStockfishRuntimeBootstrapper _runtimeBootstrapper;
+    private readonly IOnlineGameClient _onlineGameClient;
     private readonly StockfishRuntimeDescriptor _runtimeDescriptor;
 
     private LocalGameSession _session;
@@ -23,25 +26,44 @@ public sealed class GameplayController
     private AiDifficulty _selectedDifficulty;
     private string _messageText;
     private string _saveDraft;
+    private string _onlineServerUrl;
+    private string _onlinePlayerName;
+    private string _onlineRoomCode;
+    private string _onlinePlayerToken;
+    private string _onlineConnectionSummary;
     private bool _isBusy;
     private bool _runtimeInitialized;
+    private bool _isOnlineGame;
+    private bool _onlineIsConnected;
+    private bool _onlineIsReconnecting;
+    private ChessColor? _onlinePlayerColor;
+    private OnlineGameRoomState? _onlineRoomState;
 
     public GameplayController(
         IGameSessionService sessionService,
         IGameSessionPersistenceService persistenceService,
         IComputerMoveService computerMoveService,
-        IStockfishRuntimeBootstrapper runtimeBootstrapper)
+        IStockfishRuntimeBootstrapper runtimeBootstrapper,
+        IOnlineGameClient onlineGameClient)
     {
         _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
         _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         _computerMoveService = computerMoveService ?? throw new ArgumentNullException(nameof(computerMoveService));
         _runtimeBootstrapper = runtimeBootstrapper ?? throw new ArgumentNullException(nameof(runtimeBootstrapper));
+        _onlineGameClient = onlineGameClient ?? throw new ArgumentNullException(nameof(onlineGameClient));
         _runtimeDescriptor = runtimeBootstrapper.Describe();
         _session = _sessionService.CreateSession();
         _boardPerspective = ChessColor.White;
         _selectedDifficulty = AiDifficulty.Medium;
         _messageText = "New two-player game ready.";
         _saveDraft = string.Empty;
+        _onlineServerUrl = string.Empty;
+        _onlinePlayerName = string.Empty;
+        _onlineRoomCode = string.Empty;
+        _onlinePlayerToken = string.Empty;
+        _onlineConnectionSummary = "Not connected.";
+        _onlineGameClient.RoomStateChanged += OnOnlineRoomStateChanged;
+        _onlineGameClient.ConnectionStatusChanged += OnOnlineConnectionStatusChanged;
         State = BuildState();
     }
 
@@ -53,9 +75,10 @@ public sealed class GameplayController
 
     public IReadOnlyList<ChessColor> AvailableHumanColors => HumanColorOptions;
 
-    public ValueTask StartLocalGameAsync(CancellationToken cancellationToken = default)
+    public async ValueTask StartLocalGameAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        await ExitOnlineModeAsync(cancellationToken);
         _session = _sessionService.CreateSession();
         _selectedSquare = null;
         _computerPlayerColor = null;
@@ -63,7 +86,6 @@ public sealed class GameplayController
         _saveDraft = string.Empty;
         _messageText = "New two-player game ready.";
         PublishState();
-        return ValueTask.CompletedTask;
     }
 
     public async ValueTask StartComputerGameAsync(
@@ -72,6 +94,7 @@ public sealed class GameplayController
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        await ExitOnlineModeAsync(cancellationToken);
         _session = _sessionService.CreateSession();
         _selectedSquare = null;
         _computerPlayerColor = GetOpponent(humanColor);
@@ -83,13 +106,80 @@ public sealed class GameplayController
         await RunComputerTurnIfNeededAsync(cancellationToken);
     }
 
+    public void UpdateOnlineServerUrl(string? serverUrl)
+    {
+        _onlineServerUrl = serverUrl?.Trim() ?? string.Empty;
+        PublishState();
+    }
+
+    public void UpdateOnlinePlayerName(string? playerName)
+    {
+        _onlinePlayerName = playerName?.Trim() ?? string.Empty;
+        PublishState();
+    }
+
+    public void UpdateOnlineRoomCode(string? roomCode)
+    {
+        _onlineRoomCode = string.IsNullOrWhiteSpace(roomCode)
+            ? string.Empty
+            : roomCode.Trim().ToUpperInvariant();
+        PublishState();
+    }
+
+    public void UpdateOnlinePlayerToken(string? playerToken)
+    {
+        _onlinePlayerToken = playerToken?.Trim() ?? string.Empty;
+        PublishState();
+    }
+
+    public async ValueTask CreateOnlineGameAsync(CancellationToken cancellationToken = default)
+    {
+        await StartOnlineOperationAsync(
+            "Creating online room…",
+            requirePlayerName: true,
+            async serverUri =>
+            {
+                var result = await _onlineGameClient.CreateRoomAsync(serverUri, _onlinePlayerName, cancellationToken);
+                ApplyOnlineConnectionResult(result);
+            },
+            cancellationToken);
+    }
+
+    public async ValueTask JoinOnlineGameAsync(CancellationToken cancellationToken = default)
+    {
+        await StartOnlineOperationAsync(
+            $"Joining room {_onlineRoomCode}…",
+            requirePlayerName: true,
+            async serverUri =>
+            {
+                var result = await _onlineGameClient.JoinRoomAsync(serverUri, _onlineRoomCode, _onlinePlayerName, cancellationToken);
+                ApplyOnlineConnectionResult(result);
+            },
+            cancellationToken);
+    }
+
+    public async ValueTask ResumeOnlineGameAsync(CancellationToken cancellationToken = default)
+    {
+        await StartOnlineOperationAsync(
+            $"Resuming room {_onlineRoomCode}…",
+            requirePlayerName: false,
+            async serverUri =>
+            {
+                var result = await _onlineGameClient.ResumeRoomAsync(serverUri, _onlineRoomCode, _onlinePlayerToken, cancellationToken);
+                ApplyOnlineConnectionResult(result);
+            },
+            cancellationToken);
+    }
+
     public async ValueTask SelectSquareAsync(ChessPosition position, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (_isBusy)
         {
-            _messageText = "The computer is thinking. Please wait for its move.";
+            _messageText = _isOnlineGame
+                ? "Waiting for the server to finish the last online action."
+                : "The computer is thinking. Please wait for its move.";
             PublishState();
             return;
         }
@@ -101,9 +191,23 @@ public sealed class GameplayController
             return;
         }
 
+        if (IsWaitingForOnlineOpponent())
+        {
+            _messageText = "Waiting for a second player to join the online room.";
+            PublishState();
+            return;
+        }
+
         if (IsComputerTurn())
         {
             _messageText = "It is the computer's turn.";
+            PublishState();
+            return;
+        }
+
+        if (IsRemoteOpponentTurn())
+        {
+            _messageText = "It is the remote opponent's turn.";
             PublishState();
             return;
         }
@@ -129,6 +233,12 @@ public sealed class GameplayController
             return;
         }
 
+        if (_isOnlineGame)
+        {
+            await SubmitOnlineMoveAsync(_selectedSquare.Value, position, cancellationToken);
+            return;
+        }
+
         var result = _sessionService.SubmitMove(_session, _selectedSquare.Value, position);
         ApplyMoveResult(result, result.AppliedMove is null ? null : $"Played {result.AppliedMove.DisplayText}.");
 
@@ -146,6 +256,19 @@ public sealed class GameplayController
         {
             _messageText = "No promotion is awaiting a selection.";
             PublishState();
+            return;
+        }
+
+        if (_isOnlineGame)
+        {
+            if (!CanChoosePromotion())
+            {
+                _messageText = "Waiting for the online player responsible for the promotion choice.";
+                PublishState();
+                return;
+            }
+
+            await SubmitOnlinePromotionAsync(promotionPieceType, cancellationToken);
             return;
         }
 
@@ -168,6 +291,13 @@ public sealed class GameplayController
     public async ValueTask LoadSnapshotAsync(string? snapshot, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (_isOnlineGame)
+        {
+            _messageText = "Manual snapshot load is disabled during online games because the server remains authoritative.";
+            PublishState();
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(snapshot))
         {
@@ -204,6 +334,153 @@ public sealed class GameplayController
         PublishState();
     }
 
+    private async ValueTask StartOnlineOperationAsync(
+        string progressMessage,
+        bool requirePlayerName,
+        Func<Uri, Task> operation,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _isBusy = true;
+        _selectedSquare = null;
+        _messageText = progressMessage;
+        PublishState();
+
+        try
+        {
+            var serverUri = ParseOnlineServerUri(requirePlayerName);
+            await operation(serverUri);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or UriFormatException)
+        {
+            _messageText = $"Online connection failed: {exception.Message}";
+            PublishState();
+        }
+        finally
+        {
+            _isBusy = false;
+            PublishState();
+        }
+    }
+
+    private async ValueTask ExitOnlineModeAsync(CancellationToken cancellationToken)
+    {
+        if (!_isOnlineGame && !_onlineIsConnected && !_onlineIsReconnecting)
+        {
+            return;
+        }
+
+        try
+        {
+            await _onlineGameClient.DisconnectAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _onlineConnectionSummary = $"Online disconnect warning: {exception.Message}";
+        }
+
+        _isOnlineGame = false;
+        _onlineIsConnected = false;
+        _onlineIsReconnecting = false;
+        _onlinePlayerColor = null;
+        _onlineRoomState = null;
+        _onlineConnectionSummary = "Not connected.";
+    }
+
+    private void ApplyOnlineConnectionResult(OnlineRoomConnectionResult result)
+    {
+        _isOnlineGame = true;
+        _onlineIsConnected = true;
+        _onlineIsReconnecting = false;
+        _onlinePlayerColor = result.PlayerColor;
+        _onlinePlayerName = result.PlayerName;
+        _onlineRoomCode = result.RoomCode;
+        _onlinePlayerToken = result.PlayerToken;
+        _boardPerspective = result.PlayerColor;
+        ApplyOnlineRoomState(result.RoomState);
+    }
+
+    private void ApplyOnlineRoomState(OnlineGameRoomState roomState)
+    {
+        _onlineRoomState = roomState;
+        _onlineRoomCode = roomState.RoomCode;
+        _isOnlineGame = true;
+        _selectedSquare = null;
+        _session = _persistenceService.Load(roomState.SessionSnapshot);
+        _saveDraft = roomState.SessionSnapshot;
+
+        if (_onlinePlayerColor is ChessColor playerColor)
+        {
+            _boardPerspective = playerColor;
+        }
+
+        _messageText = roomState.StatusMessage;
+        PublishState();
+    }
+
+    private async ValueTask SubmitOnlineMoveAsync(ChessPosition from, ChessPosition to, CancellationToken cancellationToken)
+    {
+        _isBusy = true;
+        _messageText = $"Submitting {from}{to} to the server…";
+        PublishState();
+
+        try
+        {
+            var result = await _onlineGameClient.SubmitMoveAsync(from.ToString(), to.ToString(), cancellationToken);
+            _selectedSquare = result.Accepted ? null : _selectedSquare;
+            _messageText = result.Message;
+            if (result.Accepted)
+            {
+                ApplyOnlineRoomState(result.RoomState);
+            }
+            else
+            {
+                PublishState();
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            _messageText = $"Online move failed: {exception.Message}";
+            PublishState();
+        }
+        finally
+        {
+            _isBusy = false;
+            PublishState();
+        }
+    }
+
+    private async ValueTask SubmitOnlinePromotionAsync(PieceType promotionPieceType, CancellationToken cancellationToken)
+    {
+        _isBusy = true;
+        _messageText = $"Submitting promotion choice {FormatPieceType(promotionPieceType)}…";
+        PublishState();
+
+        try
+        {
+            var result = await _onlineGameClient.CompletePromotionAsync(promotionPieceType, cancellationToken);
+            _messageText = result.Message;
+            if (result.Accepted)
+            {
+                ApplyOnlineRoomState(result.RoomState);
+            }
+            else
+            {
+                PublishState();
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            _messageText = $"Promotion submission failed: {exception.Message}";
+            PublishState();
+        }
+        finally
+        {
+            _isBusy = false;
+            PublishState();
+        }
+    }
+
     private void SelectOwnPiece(ChessPosition position)
     {
         var piece = _session.Game.Board[position];
@@ -211,6 +488,13 @@ public sealed class GameplayController
         if (piece is not ChessPiece boardPiece || boardPiece.Color != _session.Game.SideToMove)
         {
             _messageText = $"Select a {FormatColor(_session.Game.SideToMove)} piece to move.";
+            PublishState();
+            return;
+        }
+
+        if (_isOnlineGame && _onlinePlayerColor is ChessColor playerColor && boardPiece.Color != playerColor)
+        {
+            _messageText = $"You are playing {FormatColor(playerColor)} in this online room.";
             PublishState();
             return;
         }
@@ -341,16 +625,37 @@ public sealed class GameplayController
             _computerPlayerColor,
             _isBusy,
             IsComputerTurn(),
+            CanInteractWithBoard(),
+            CanChoosePromotion(),
             squares,
             _session.MoveHistory.Select(record => record.DisplayText).ToArray(),
             pendingPromotion?.AvailablePieceTypes.ToArray() ?? Array.Empty<PieceType>(),
             pendingPromotion is null
                 ? string.Empty
-                : $"Choose a promotion piece for {pendingPromotion.CoordinateNotation}." );
+                : $"Choose a promotion piece for {pendingPromotion.CoordinateNotation}.",
+            new OnlinePlayViewState(
+                _isOnlineGame,
+                _onlineServerUrl,
+                _onlinePlayerName,
+                _onlineRoomCode,
+                _onlinePlayerToken,
+                _onlineConnectionSummary,
+                DescribeOnlineSeatSummary(),
+                _onlinePlayerColor,
+                _onlineRoomState?.IsAwaitingOpponent ?? false,
+                _onlineIsConnected,
+                _onlineIsReconnecting));
     }
 
     private string DescribeMode()
     {
+        if (_isOnlineGame)
+        {
+            var playerColor = _onlinePlayerColor is ChessColor color ? FormatColor(color) : "Observer";
+            var roomCode = string.IsNullOrWhiteSpace(_onlineRoomCode) ? "pending" : _onlineRoomCode;
+            return $"Mode: Online room {roomCode} · {playerColor}";
+        }
+
         if (_computerPlayerColor is null)
         {
             return "Mode: Local two-player";
@@ -361,6 +666,11 @@ public sealed class GameplayController
 
     private string DescribeStatus()
     {
+        if (_isOnlineGame && IsWaitingForOnlineOpponent())
+        {
+            return "Waiting for Black to join the online room.";
+        }
+
         if (_session.PendingPromotion is PendingPromotionSelection pendingPromotion)
         {
             return $"{FormatColor(pendingPromotion.Player)} promotion pending on {pendingPromotion.CoordinateNotation}.";
@@ -381,12 +691,116 @@ public sealed class GameplayController
         return $"AI runtime: {_runtimeDescriptor.IntegrationMode} @ {_runtimeDescriptor.RuntimeLocation}";
     }
 
+    private string DescribeOnlineSeatSummary()
+    {
+        if (_onlineRoomState is null)
+        {
+            return "No online room connected.";
+        }
+
+        var blackPlayer = string.IsNullOrWhiteSpace(_onlineRoomState.BlackPlayerName)
+            ? "Open seat"
+            : _onlineRoomState.BlackPlayerName;
+        return $"White: {_onlineRoomState.WhitePlayerName} · Black: {blackPlayer}";
+    }
+
+    private bool CanInteractWithBoard()
+    {
+        if (_isBusy || _session.PendingPromotion is not null)
+        {
+            return false;
+        }
+
+        if (_isOnlineGame)
+        {
+            return _onlineRoomState?.IsAwaitingOpponent == false &&
+                   _onlineIsConnected &&
+                   _onlinePlayerColor is ChessColor playerColor &&
+                   playerColor == _session.Game.SideToMove;
+        }
+
+        return !IsComputerTurn();
+    }
+
+    private bool CanChoosePromotion()
+    {
+        if (_isBusy || _session.PendingPromotion is null)
+        {
+            return false;
+        }
+
+        if (!_isOnlineGame)
+        {
+            return true;
+        }
+
+        return _onlineIsConnected &&
+               _onlinePlayerColor is ChessColor playerColor &&
+               playerColor == _session.PendingPromotion.Player;
+    }
+
     private bool IsComputerTurn()
     {
         return _computerPlayerColor is ChessColor computerColor &&
                !_session.IsComplete &&
                _session.PendingPromotion is null &&
                computerColor == _session.Game.SideToMove;
+    }
+
+    private bool IsRemoteOpponentTurn()
+    {
+        return _isOnlineGame &&
+               _onlinePlayerColor is ChessColor playerColor &&
+               _session.PendingPromotion is null &&
+               _onlineRoomState?.IsAwaitingOpponent == false &&
+               playerColor != _session.Game.SideToMove;
+    }
+
+    private bool IsWaitingForOnlineOpponent()
+    {
+        return _isOnlineGame && _onlineRoomState?.IsAwaitingOpponent == true;
+    }
+
+    private Uri ParseOnlineServerUri(bool requirePlayerName)
+    {
+        if (string.IsNullOrWhiteSpace(_onlineServerUrl))
+        {
+            throw new InvalidOperationException("Enter the multiplayer backend URL first.");
+        }
+
+        if (!Uri.TryCreate(_onlineServerUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException("Enter an absolute http:// or https:// backend URL.");
+        }
+
+        if (requirePlayerName && string.IsNullOrWhiteSpace(_onlinePlayerName))
+        {
+            throw new InvalidOperationException("Enter a player name before creating or joining a room.");
+        }
+
+        return uri;
+    }
+
+    private void OnOnlineRoomStateChanged(OnlineGameRoomState roomState)
+    {
+        try
+        {
+            ApplyOnlineRoomState(roomState);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            _messageText = $"Online state sync failed: {exception.Message}";
+            PublishState();
+        }
+    }
+
+    private void OnOnlineConnectionStatusChanged(OnlineConnectionStatus status)
+    {
+        _onlineConnectionSummary = status.Summary;
+        _onlineIsConnected = status.IsConnected;
+        _onlineIsReconnecting = status.IsReconnecting;
+        PublishState();
     }
 
     private static ChessPosition TranslateDisplayCoordinates(int displayRow, int displayColumn, ChessColor perspective)
@@ -438,13 +852,29 @@ public sealed record GameplayViewState(
     ChessColor? ComputerPlayerColor,
     bool IsBusy,
     bool IsComputerTurn,
+    bool CanInteractWithBoard,
+    bool CanChoosePromotion,
     IReadOnlyList<ChessBoardSquareViewState> BoardSquares,
     IReadOnlyList<string> MoveHistory,
     IReadOnlyList<PieceType> PendingPromotionChoices,
-    string PendingPromotionPrompt)
+    string PendingPromotionPrompt,
+    OnlinePlayViewState OnlinePlay)
 {
     public bool HasPendingPromotion => PendingPromotionChoices.Count > 0;
 }
+
+public sealed record OnlinePlayViewState(
+    bool IsOnlineGame,
+    string ServerUrl,
+    string PlayerName,
+    string RoomCode,
+    string PlayerToken,
+    string ConnectionSummary,
+    string SeatSummary,
+    ChessColor? PlayerColor,
+    bool IsAwaitingOpponent,
+    bool IsConnected,
+    bool IsReconnecting);
 
 public sealed record ChessBoardSquareViewState(
     ChessPosition Position,

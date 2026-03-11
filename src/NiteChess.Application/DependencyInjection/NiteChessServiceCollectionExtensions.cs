@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NiteChess.Application.ComputerPlay;
 using NiteChess.Application.Configuration;
 using NiteChess.Application.GameSessions;
+using NiteChess.Online;
 using NiteChess.Stockfish;
 using NiteChess.Stockfish.Abstractions;
 
@@ -26,6 +27,7 @@ public static class NiteChessServiceCollectionExtensions
             Platform = platformDescriptor,
             Stockfish = stockfishRuntime
         });
+        services.TryAddSingleton<IOnlineGameClient, DisabledOnlineGameClient>();
         services.TryAddSingleton<IStockfishEngineClient>(serviceProvider =>
             new RuntimeConfiguredStockfishEngineClient(
                 serviceProvider.GetRequiredService<StockfishRuntimeDescriptor>(),

@@ -4,6 +4,7 @@ using NiteChess.Application.Configuration;
 using NiteChess.Application.DependencyInjection;
 using NiteChess.Application.Gameplay;
 using NiteChess.Desktop.Services;
+using NiteChess.Online;
 using NiteChess.Stockfish.Abstractions;
 
 namespace NiteChess.Desktop;
@@ -29,6 +30,7 @@ internal static class Program
                 IsBundled: true,
                 Notes: "Desktop runtime resolution is driven by Assets/Stockfish/desktop-stockfish.bundle.json, which ships Stockfish 18 executables in the per-RID native folders."));
         services.AddSingleton<IStockfishRuntimeBootstrapper, DesktopStockfishRuntimeBootstrapper>();
+        services.AddSingleton<IOnlineGameClient, SignalROnlineGameClient>();
         services.AddSingleton<GameplayController>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();

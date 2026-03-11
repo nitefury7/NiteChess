@@ -2,6 +2,7 @@ using NiteChess.Application.Configuration;
 using NiteChess.Application.DependencyInjection;
 using NiteChess.Application.Gameplay;
 using NiteChess.Mobile.Services;
+using NiteChess.Online;
 using NiteChess.Stockfish.Abstractions;
 
 namespace NiteChess.Mobile;
@@ -30,6 +31,7 @@ public static class MauiProgram
                 Notes: "Bundle manifest ships at Resources/Raw/Stockfish/mobile-stockfish.bundle.json and maps Android to a bundled Stockfish executable while iOS links the bundled static bridge library."));
         builder.Services.AddSingleton<IStockfishEngineClientFactory, MobileNativeLibraryStockfishEngineClientFactory>();
         builder.Services.AddSingleton<IStockfishRuntimeBootstrapper, MobileStockfishRuntimeBootstrapper>();
+        builder.Services.AddSingleton<IOnlineGameClient, SignalROnlineGameClient>();
         builder.Services.AddSingleton<GameplayController>();
         builder.Services.AddSingleton<MainPage>();
 

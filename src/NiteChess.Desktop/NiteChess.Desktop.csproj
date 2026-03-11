@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../NiteChess.Application/NiteChess.Application.csproj" />
+    <ProjectReference Include="../NiteChess.Online/NiteChess.Online.csproj" />
     <ProjectReference Include="../NiteChess.Stockfish/NiteChess.Stockfish.csproj" />
   </ItemGroup>
 

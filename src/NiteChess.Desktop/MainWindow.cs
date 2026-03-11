@@ -32,6 +32,13 @@ public sealed class MainWindow : Window
     private readonly TextBox _saveBox;
     private readonly ComboBox _difficultyBox;
     private readonly ComboBox _humanColorBox;
+    private readonly TextBox _onlineServerUrlBox;
+    private readonly TextBox _onlinePlayerNameBox;
+    private readonly TextBox _onlineRoomCodeBox;
+    private readonly TextBox _onlinePlayerTokenBox;
+    private readonly TextBlock _onlineConnectionBlock;
+    private readonly TextBlock _onlinePlayersBlock;
+    private readonly TextBlock _onlineRoleBlock;
 
     public MainWindow(MainWindowViewModel viewModel)
     {
@@ -95,6 +102,17 @@ public sealed class MainWindow : Window
             SelectedItem = ChessColor.White,
             MinWidth = 180
         };
+        _onlineServerUrlBox = new TextBox { Watermark = "https://localhost:5001" };
+        _onlineServerUrlBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlineServerUrl(text));
+        _onlinePlayerNameBox = new TextBox { Watermark = "Player name" };
+        _onlinePlayerNameBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlinePlayerName(text));
+        _onlineRoomCodeBox = new TextBox { Watermark = "ABC123" };
+        _onlineRoomCodeBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlineRoomCode(text));
+        _onlinePlayerTokenBox = new TextBox { Watermark = "Reconnect token" };
+        _onlinePlayerTokenBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlinePlayerToken(text));
+        _onlineConnectionBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
+        _onlinePlayersBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
+        _onlineRoleBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
         _boardGrid = CreateBoardGrid();
 
         Content = BuildLayout();
@@ -208,8 +226,24 @@ public sealed class MainWindow : Window
             await _gameplay.StartComputerGameAsync(humanColor, difficulty);
         };
 
+        var createRoomButton = new Button { Content = "Create room" };
+        createRoomButton.Click += async (_, _) => await _gameplay.CreateOnlineGameAsync();
+
+        var joinRoomButton = new Button { Content = "Join room" };
+        joinRoomButton.Click += async (_, _) => await _gameplay.JoinOnlineGameAsync();
+
+        var resumeRoomButton = new Button { Content = "Resume room" };
+        resumeRoomButton.Click += async (_, _) => await _gameplay.ResumeOnlineGameAsync();
+
         buttonRow.Children.Add(localButton);
         buttonRow.Children.Add(aiButton);
+
+        var onlineButtonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children = { createRoomButton, joinRoomButton, resumeRoomButton }
+        };
 
         return new Border
         {
@@ -229,7 +263,21 @@ public sealed class MainWindow : Window
                     new TextBlock { Text = "Human plays" },
                     _humanColorBox,
                     buttonRow,
-                    _runtimeBlock
+                    _runtimeBlock,
+                    new Separator(),
+                    new TextBlock { Text = "Online multiplayer", FontSize = 20, FontWeight = FontWeight.SemiBold },
+                    new TextBlock { Text = "Backend URL" },
+                    _onlineServerUrlBox,
+                    new TextBlock { Text = "Player name" },
+                    _onlinePlayerNameBox,
+                    new TextBlock { Text = "Room code" },
+                    _onlineRoomCodeBox,
+                    new TextBlock { Text = "Reconnect token" },
+                    _onlinePlayerTokenBox,
+                    onlineButtonRow,
+                    _onlineConnectionBlock,
+                    _onlinePlayersBlock,
+                    _onlineRoleBlock
                 }
             }
         };
@@ -324,10 +372,35 @@ public sealed class MainWindow : Window
         _runtimeBlock.Text = state.AiRuntimeSummary;
         _promotionPrompt.Text = state.PendingPromotionPrompt;
         _promotionPanel.IsVisible = state.HasPendingPromotion;
+        _onlineConnectionBlock.Text = $"Connection: {state.OnlinePlay.ConnectionSummary}";
+        _onlinePlayersBlock.Text = $"Players: {state.OnlinePlay.SeatSummary}";
+        _onlineRoleBlock.Text = state.OnlinePlay.PlayerColor is ChessColor playerColor
+            ? $"You are: {FormatColor(playerColor)}"
+            : string.Empty;
 
         if (!string.Equals(_saveBox.Text, state.SaveDraft, StringComparison.Ordinal))
         {
             _saveBox.Text = state.SaveDraft;
+        }
+
+        if (!string.Equals(_onlineServerUrlBox.Text, state.OnlinePlay.ServerUrl, StringComparison.Ordinal))
+        {
+            _onlineServerUrlBox.Text = state.OnlinePlay.ServerUrl;
+        }
+
+        if (!string.Equals(_onlinePlayerNameBox.Text, state.OnlinePlay.PlayerName, StringComparison.Ordinal))
+        {
+            _onlinePlayerNameBox.Text = state.OnlinePlay.PlayerName;
+        }
+
+        if (!string.Equals(_onlineRoomCodeBox.Text, state.OnlinePlay.RoomCode, StringComparison.Ordinal))
+        {
+            _onlineRoomCodeBox.Text = state.OnlinePlay.RoomCode;
+        }
+
+        if (!string.Equals(_onlinePlayerTokenBox.Text, state.OnlinePlay.PlayerToken, StringComparison.Ordinal))
+        {
+            _onlinePlayerTokenBox.Text = state.OnlinePlay.PlayerToken;
         }
 
         if (_difficultyBox.SelectedItem is not AiDifficulty selectedDifficulty || selectedDifficulty != state.SelectedDifficulty)
@@ -363,7 +436,7 @@ public sealed class MainWindow : Window
                 Padding = new Thickness(0),
                 Background = ResolveSquareBrush(square),
                 Foreground = square.Piece?.Color == ChessColor.White ? WhitePieceBrush : BlackPieceBrush,
-                IsEnabled = !state.IsBusy && !state.HasPendingPromotion && !state.IsComputerTurn
+                IsEnabled = state.CanInteractWithBoard
             };
             button.Click += async (_, _) => await _gameplay.SelectSquareAsync(square.Position);
 
@@ -402,7 +475,7 @@ public sealed class MainWindow : Window
             var choiceButton = new Button
             {
                 Content = pieceType.ToString(),
-                IsEnabled = !state.IsBusy
+                IsEnabled = state.CanChoosePromotion
             };
             choiceButton.Click += async (_, _) => await _gameplay.ChoosePromotionAsync(pieceType);
             _promotionPanel.Children.Add(choiceButton);
@@ -432,5 +505,10 @@ public sealed class MainWindow : Window
     private static IBrush CreateBrush(string hex)
     {
         return new SolidColorBrush(Color.Parse(hex));
+    }
+
+    private static string FormatColor(ChessColor color)
+    {
+        return color == ChessColor.White ? "White" : "Black";
     }
 }
