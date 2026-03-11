@@ -2,6 +2,6 @@
   <PropertyGroup>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>12.0</LangVersion>
+    <LangVersion>14.0</LangVersion>
   </PropertyGroup>
 </Project>

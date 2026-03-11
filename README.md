@@ -1,6 +1,6 @@
 # NiteChess
 
-Wave 1 scaffolds the shared .NET 8 solution architecture for a cross-platform chess application.
+Wave 1 scaffolds the shared .NET 10 solution architecture for a cross-platform chess application.
 
 ## Solution layout
 
@@ -16,7 +16,7 @@ Wave 1 scaffolds the shared .NET 8 solution architecture for a cross-platform ch
 
 ## Prerequisites
 
-- .NET 8 SDK
+- .NET 10 SDK
 - .NET MAUI workload for mobile builds
 - Platform toolchains for the selected MAUI targets
 
