@@ -54,6 +54,8 @@ public sealed class MainWindow : Window
     private readonly TextBlock _onlineConnectionBlock;
     private readonly TextBlock _onlinePlayersBlock;
     private readonly TextBlock _onlineRoleBlock;
+    private Border _boardFrame = null!;
+    private Border _boardSurface = null!;
 
     public MainWindow(MainWindowViewModel viewModel)
     {
@@ -139,6 +141,8 @@ public sealed class MainWindow : Window
         _boardGrid = CreateBoardGrid();
 
         Content = BuildLayout();
+        SizeChanged += (_, _) => AdjustBoardSurfaceSize();
+        _boardFrame.SizeChanged += (_, _) => AdjustBoardSurfaceSize();
 
         _gameplay.StateChanged += OnGameplayStateChanged;
         Closed += (_, _) => _gameplay.StateChanged -= OnGameplayStateChanged;
@@ -187,31 +191,34 @@ public sealed class MainWindow : Window
         Grid.SetRow(headerPanel, 0);
         boardColumn.Children.Add(headerPanel);
 
-        var boardFrame = new Border
+        _boardSurface = new Border
+        {
+            Width = 640,
+            Height = 640,
+            Background = BoardOutlineBrush,
+            BorderBrush = BoardFrameAccentBrush,
+            BorderThickness = new Thickness(3),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = _boardGrid
+        };
+
+        _boardFrame = new Border
         {
             Background = BoardFrameBrush,
             BorderBrush = BoardFrameAccentBrush,
             BorderThickness = new Thickness(4),
             CornerRadius = new CornerRadius(18),
             Padding = new Thickness(18),
-            Child = new Viewbox
+            Child = new Grid
             {
-                Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
-                Child = new Border
-                {
-                    Width = 640,
-                    Height = 640,
-                    Background = BoardOutlineBrush,
-                    BorderBrush = BoardFrameAccentBrush,
-                    BorderThickness = new Thickness(3),
-                    Child = _boardGrid
-                }
+                Children = { _boardSurface }
             }
         };
-        Grid.SetRow(boardFrame, 1);
-        boardColumn.Children.Add(boardFrame);
+        Grid.SetRow(_boardFrame, 1);
+        boardColumn.Children.Add(_boardFrame);
 
         var promotionSection = new StackPanel
         {
@@ -450,6 +457,7 @@ public sealed class MainWindow : Window
         RenderBoard(state);
         RenderHistory(state);
         RenderPromotionChoices(state);
+        AdjustBoardSurfaceSize();
     }
 
     private void RenderBoard(GameplayViewState state)
@@ -600,6 +608,28 @@ public sealed class MainWindow : Window
     private void OnGameplayStateChanged(object? sender, EventArgs eventArgs)
     {
         Dispatcher.UIThread.Post(RefreshUi);
+    }
+
+    private void AdjustBoardSurfaceSize()
+    {
+        var availableWidth = _boardFrame.Bounds.Width - _boardFrame.Padding.Left - _boardFrame.Padding.Right - _boardFrame.BorderThickness.Left - _boardFrame.BorderThickness.Right;
+        var availableHeight = _boardFrame.Bounds.Height - _boardFrame.Padding.Top - _boardFrame.Padding.Bottom - _boardFrame.BorderThickness.Top - _boardFrame.BorderThickness.Bottom;
+        var targetSize = Math.Max(0, Math.Min(availableWidth, availableHeight));
+
+        if (targetSize <= 0)
+        {
+            return;
+        }
+
+        if (Math.Abs(_boardSurface.Width - targetSize) > 0.5)
+        {
+            _boardSurface.Width = targetSize;
+        }
+
+        if (Math.Abs(_boardSurface.Height - targetSize) > 0.5)
+        {
+            _boardSurface.Height = targetSize;
+        }
     }
 
     private static IBrush ResolveSquareBrush(ChessBoardSquareViewState square)
