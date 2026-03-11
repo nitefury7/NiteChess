@@ -380,7 +380,7 @@ public sealed class ChessGame
         board.SetPiece(move.To, placedPiece);
 
         var nextCastlingRights = UpdateCastlingRights(movingPiece, move.From, move.To, capturedPiece);
-        var nextEnPassantTarget = movingPiece.Type == PieceType.Pawn && Math.Abs(move.To.Rank - move.From.Rank) == 2
+        ChessPosition? nextEnPassantTarget = movingPiece.Type == PieceType.Pawn && Math.Abs(move.To.Rank - move.From.Rank) == 2
             ? new ChessPosition(move.From.File, (move.From.Rank + move.To.Rank) / 2)
             : null;
         var nextHalfmoveClock = movingPiece.Type == PieceType.Pawn || capturedPiece is not null ? 0 : HalfmoveClock + 1;

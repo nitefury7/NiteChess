@@ -103,13 +103,13 @@ public sealed class MainWindow : Window
             MinWidth = 180
         };
         _onlineServerUrlBox = new TextBox { Watermark = "https://localhost:5001" };
-        _onlineServerUrlBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlineServerUrl(text));
+        _onlineServerUrlBox.TextChanged += (_, _) => _gameplay.UpdateOnlineServerUrl(_onlineServerUrlBox.Text);
         _onlinePlayerNameBox = new TextBox { Watermark = "Player name" };
-        _onlinePlayerNameBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlinePlayerName(text));
+        _onlinePlayerNameBox.TextChanged += (_, _) => _gameplay.UpdateOnlinePlayerName(_onlinePlayerNameBox.Text);
         _onlineRoomCodeBox = new TextBox { Watermark = "ABC123" };
-        _onlineRoomCodeBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlineRoomCode(text));
+        _onlineRoomCodeBox.TextChanged += (_, _) => _gameplay.UpdateOnlineRoomCode(_onlineRoomCodeBox.Text);
         _onlinePlayerTokenBox = new TextBox { Watermark = "Reconnect token" };
-        _onlinePlayerTokenBox.GetObservable(TextBox.TextProperty).Subscribe(text => _gameplay.UpdateOnlinePlayerToken(text));
+        _onlinePlayerTokenBox.TextChanged += (_, _) => _gameplay.UpdateOnlinePlayerToken(_onlinePlayerTokenBox.Text);
         _onlineConnectionBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
         _onlinePlayersBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };
         _onlineRoleBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = MutedTextBrush };

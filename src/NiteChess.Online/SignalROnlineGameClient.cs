@@ -247,7 +247,7 @@ public sealed class SignalROnlineGameClient : IOnlineGameClient, IAsyncDisposabl
 
     private static Uri BuildHubUri(Uri serverUri)
     {
-        var baseUri = serverUri.AbsoluteUri.EndsWith('/', StringComparison.Ordinal)
+        var baseUri = serverUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
             ? serverUri
             : new Uri(serverUri.AbsoluteUri + "/", UriKind.Absolute);
 

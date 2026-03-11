@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace NiteChess.Desktop;
 
-public sealed class App : Application
+public sealed class App : Avalonia.Application
 {
     public static IServiceProvider? Services { get; set; }
 
