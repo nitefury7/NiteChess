@@ -9,9 +9,9 @@ public sealed class BrowserWorkerStockfishRuntimeBootstrapper : IStockfishRuntim
         return new StockfishRuntimeDescriptor(
             HostId: "web-client",
             IntegrationMode: StockfishIntegrationMode.BrowserWasmWorker,
-            RuntimeLocation: "wwwroot/workers/stockfish.worker.js",
-            IsBundled: false,
-            Notes: "Web package manifest lives at wwwroot/stockfish/web-stockfish.bundle.json and expects Stockfish 18 WASM assets under wwwroot/stockfish for offline worker-based play.");
+            RuntimeLocation: "wwwroot/stockfish/web-stockfish.bundle.json",
+            IsBundled: true,
+            Notes: "Web package manifest lives at wwwroot/stockfish/web-stockfish.bundle.json and resolves the bundled Stockfish 18 worker/WASM assets for offline play.");
     }
 
     public ValueTask WarmUpAsync(CancellationToken cancellationToken = default)

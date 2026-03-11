@@ -37,7 +37,7 @@ public sealed class MobileNativeLibraryStockfishEngineClient : IStockfishEngineC
         {
             throw new InvalidOperationException(
                 $"Mobile Stockfish bridge exports were not found for runtime '{_runtimeDescriptor.RuntimeLocation}'. " +
-                "Bundle the native bridge library (Android `.so` / iOS `.a`) that exposes `nitechess_stockfish_request_bestmove_utf8` and `nitechess_stockfish_free_utf8`.",
+                "Bundle the iOS static bridge library that exposes `nitechess_stockfish_request_bestmove_utf8` and `nitechess_stockfish_free_utf8`.",
                 exception);
         }
     }
@@ -88,13 +88,7 @@ public sealed class MobileNativeLibraryStockfishEngineClient : IStockfishEngineC
             }
         }
 
-#if ANDROID
-        [DllImport("nitechess_stockfish_bridge", EntryPoint = "nitechess_stockfish_request_bestmove_utf8", CallingConvention = CallingConvention.Cdecl)]
-        private static extern IntPtr RequestBestMoveUtf8(IntPtr commandPayloadUtf8);
-
-        [DllImport("nitechess_stockfish_bridge", EntryPoint = "nitechess_stockfish_free_utf8", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void FreeUtf8(IntPtr value);
-#elif IOS
+#if IOS
         [DllImport("__Internal", EntryPoint = "nitechess_stockfish_request_bestmove_utf8", CallingConvention = CallingConvention.Cdecl)]
         private static extern IntPtr RequestBestMoveUtf8(IntPtr commandPayloadUtf8);
 

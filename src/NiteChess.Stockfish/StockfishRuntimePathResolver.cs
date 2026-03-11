@@ -12,15 +12,41 @@ public static class StockfishRuntimePathResolver
 
         var location = runtimeDescriptor.RuntimeLocation;
 
-        if (location.Contains("{rid}", StringComparison.Ordinal))
+        if (IsBundleManifestPath(location))
         {
-            location = location.Replace("{rid}", GetDesktopRuntimeIdentifier(), StringComparison.Ordinal);
+            location = ResolveManifestEntryPoint(runtimeDescriptor, location);
         }
 
-        if (location.Contains("{platform}", StringComparison.Ordinal))
+        return ResolvePath(location);
+    }
+
+    private static string ResolveManifestEntryPoint(StockfishRuntimeDescriptor runtimeDescriptor, string manifestLocation)
+    {
+        var manifestPath = ResolvePath(manifestLocation);
+
+        if (!File.Exists(manifestPath))
         {
-            location = location.Replace("{platform}", GetMobilePlatformIdentifier(), StringComparison.Ordinal);
+            throw new InvalidOperationException(
+                $"Stockfish bundle manifest '{manifestLocation}' could not be found for host '{runtimeDescriptor.HostId}'.");
         }
+
+        var manifest = StockfishBundleManifest.Parse(File.ReadAllText(manifestPath));
+
+        if (runtimeDescriptor.IntegrationMode == StockfishIntegrationMode.NativeProcess)
+        {
+            return ExpandTokens(
+                manifest.EntryPointPattern
+                ?? throw new InvalidOperationException(
+                    $"Stockfish bundle manifest '{manifestLocation}' does not declare an entryPointPattern for native-process execution."));
+        }
+
+        throw new InvalidOperationException(
+            $"Stockfish bundle manifest resolution is not supported for integration mode '{runtimeDescriptor.IntegrationMode}' in '{manifestLocation}'.");
+    }
+
+    private static string ResolvePath(string location)
+    {
+        location = ExpandTokens(location);
 
         if (Path.IsPathRooted(location))
         {
@@ -37,6 +63,26 @@ public static class StockfishRuntimePathResolver
         return File.Exists(workingDirectoryCandidate)
             ? workingDirectoryCandidate
             : baseDirectoryCandidate;
+    }
+
+    private static string ExpandTokens(string location)
+    {
+        if (location.Contains("{rid}", StringComparison.Ordinal))
+        {
+            location = location.Replace("{rid}", GetDesktopRuntimeIdentifier(), StringComparison.Ordinal);
+        }
+
+        if (location.Contains("{platform}", StringComparison.Ordinal))
+        {
+            location = location.Replace("{platform}", GetMobilePlatformIdentifier(), StringComparison.Ordinal);
+        }
+
+        return location;
+    }
+
+    private static bool IsBundleManifestPath(string location)
+    {
+        return location.EndsWith(".bundle.json", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetDesktopRuntimeIdentifier()

@@ -25,9 +25,9 @@ public static class MauiProgram
             new StockfishRuntimeDescriptor(
                 HostId: "mobile",
                 IntegrationMode: StockfishIntegrationMode.NativeLibrary,
-                RuntimeLocation: "Resources/Raw/Stockfish/native/{platform}/libnitechess_stockfish_bridge",
-                IsBundled: false,
-                Notes: "Bundle manifest ships at Resources/Raw/Stockfish/mobile-stockfish.bundle.json; drop the platform bridge library plus linked Stockfish 18 assets into the per-platform native folders."));
+                RuntimeLocation: "Resources/Raw/Stockfish/mobile-stockfish.bundle.json",
+                IsBundled: true,
+                Notes: "Bundle manifest ships at Resources/Raw/Stockfish/mobile-stockfish.bundle.json and maps Android to a bundled Stockfish executable while iOS links the bundled static bridge library."));
         builder.Services.AddSingleton<IStockfishEngineClientFactory, MobileNativeLibraryStockfishEngineClientFactory>();
         builder.Services.AddSingleton<IStockfishRuntimeBootstrapper, MobileStockfishRuntimeBootstrapper>();
         builder.Services.AddSingleton<GameplayController>();

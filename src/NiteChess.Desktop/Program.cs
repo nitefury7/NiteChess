@@ -25,9 +25,9 @@ internal static class Program
             new StockfishRuntimeDescriptor(
                 HostId: "desktop",
                 IntegrationMode: StockfishIntegrationMode.NativeProcess,
-                RuntimeLocation: "Assets/Stockfish/native/{rid}/stockfish",
-                IsBundled: false,
-                Notes: "Bundle manifest ships at Assets/Stockfish/desktop-stockfish.bundle.json; drop Stockfish 18 executables and NNUE files into the per-RID native folders."));
+                RuntimeLocation: "Assets/Stockfish/desktop-stockfish.bundle.json",
+                IsBundled: true,
+                Notes: "Desktop runtime resolution is driven by Assets/Stockfish/desktop-stockfish.bundle.json, which ships Stockfish 18 executables in the per-RID native folders."));
         services.AddSingleton<IStockfishRuntimeBootstrapper, DesktopStockfishRuntimeBootstrapper>();
         services.AddSingleton<GameplayController>();
         services.AddSingleton<MainWindowViewModel>();

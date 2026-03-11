@@ -1,12 +1,14 @@
 {
   "hostId": "mobile",
   "integrationMode": "NativeLibrary",
-  "bundleRoot": "Resources/Raw/Stockfish/native",
-  "entryPointPattern": "Resources/Raw/Stockfish/native/{platform}/libnitechess_stockfish_bridge",
+  "bundleRoot": "Resources/Raw/Stockfish",
+  "platformEntries": {
+    "android-arm64-v8a": "Resources/Raw/Stockfish/native/android-arm64-v8a/stockfish",
+    "ios-arm64": "Resources/Raw/Stockfish/native/ios-arm64/libnitechess_stockfish_bridge.a"
+  },
   "requiredAssets": [
-    "Resources/Raw/Stockfish/native/android-arm64-v8a/libnitechess_stockfish_bridge.so",
-    "Resources/Raw/Stockfish/native/android-x86_64/libnitechess_stockfish_bridge.so",
+    "Resources/Raw/Stockfish/native/android-arm64-v8a/stockfish",
     "Resources/Raw/Stockfish/native/ios-arm64/libnitechess_stockfish_bridge.a"
   ],
-  "notes": "Bundle a thin native bridge library that exports nitechess_stockfish_request_bestmove_utf8 / nitechess_stockfish_free_utf8 and links Stockfish 18 plus NNUE assets so Android and iOS ship a fully offline engine path with no network fetch."
+  "notes": "Android uses the bundled Stockfish 18 arm64 executable extracted from the app package, while iOS links a bundled static bridge library that exports nitechess_stockfish_request_bestmove_utf8 / nitechess_stockfish_free_utf8."
 }

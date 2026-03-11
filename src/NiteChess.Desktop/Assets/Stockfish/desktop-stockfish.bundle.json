@@ -6,8 +6,7 @@
   "requiredAssets": [
     "Assets/Stockfish/native/osx-arm64/stockfish",
     "Assets/Stockfish/native/osx-x64/stockfish",
-    "Assets/Stockfish/native/linux-arm64/stockfish",
     "Assets/Stockfish/native/linux-x64/stockfish"
   ],
-  "notes": "Place Stockfish 18 executables and adjacent NNUE network files in the matching RID folders. Desktop copies this asset tree into the local app output so AI play remains offline."
+  "notes": "Bundled desktop Stockfish 18 executables currently ship for macOS arm64, macOS x64, and Linux x64. Desktop copies this asset tree into the local app output so AI play remains offline."
 }

@@ -17,9 +17,9 @@ builder.Services.AddNiteChessApplication(
     new StockfishRuntimeDescriptor(
         HostId: "web-client",
         IntegrationMode: StockfishIntegrationMode.BrowserWasmWorker,
-        RuntimeLocation: "wwwroot/workers/stockfish.worker.js",
-        IsBundled: false,
-        Notes: "Bundle manifest ships at wwwroot/stockfish/web-stockfish.bundle.json; add Stockfish 18 WASM assets under wwwroot/stockfish and boot them through the dedicated worker."));
+        RuntimeLocation: "wwwroot/stockfish/web-stockfish.bundle.json",
+        IsBundled: true,
+        Notes: "Bundle manifest ships at wwwroot/stockfish/web-stockfish.bundle.json and resolves the Stockfish 18 worker plus WASM assets for offline browser play."));
 builder.Services.AddSingleton<IStockfishRuntimeBootstrapper, BrowserWorkerStockfishRuntimeBootstrapper>();
 builder.Services.AddSingleton<IStockfishEngineClient, BrowserWorkerStockfishEngineClient>();
 

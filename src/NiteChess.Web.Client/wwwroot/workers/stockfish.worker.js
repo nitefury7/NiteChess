@@ -4,8 +4,8 @@ self.addEventListener("message", async event => {
   if (payload.type === "init") {
     self.postMessage({
       type: "ready",
-      expectedScript: "/stockfish/stockfish.js",
-      expectedWasm: "/stockfish/stockfish.wasm"
+      expectedScript: payload.engineScriptPath ?? "/stockfish/stockfish.js",
+      expectedWasm: payload.engineWasmPath ?? "/stockfish/stockfish.wasm"
     });
     return;
   }
@@ -15,7 +15,10 @@ self.addEventListener("message", async event => {
   }
 
   try {
-    await analyze(Array.isArray(payload.commands) ? payload.commands : []);
+    await analyze(
+      Array.isArray(payload.commands) ? payload.commands : [],
+      payload.engineScriptPath,
+      payload.engineWasmPath);
   } catch (error) {
     self.postMessage({
       type: "runtime-error",
@@ -25,8 +28,8 @@ self.addEventListener("message", async event => {
   }
 });
 
-async function analyze(commands) {
-  const engine = createEngineWorker(commands);
+async function analyze(commands, engineScriptPath, engineWasmPath) {
+  const engine = createEngineWorker(engineScriptPath, engineWasmPath);
   let settled = false;
   const timeoutHandle = setTimeout(() => {
     if (settled) {
@@ -40,7 +43,7 @@ async function analyze(commands) {
       commands,
       message: "Timed out waiting for a Stockfish WebAssembly bestmove response."
     });
-  }, 15000);
+  }, 60000);
 
   engine.onmessage = event => {
     const line = normalizeEngineMessage(event.data);
@@ -61,7 +64,8 @@ async function analyze(commands) {
     self.postMessage({
       type: "bestmove",
       bestMoveNotation: parsed.bestMoveNotation,
-      ponderMoveNotation: parsed.ponderMoveNotation
+      ponderMoveNotation: parsed.ponderMoveNotation,
+      engineWasmPath
     });
   };
 
@@ -85,20 +89,18 @@ async function analyze(commands) {
   }
 }
 
-function createEngineWorker(commands) {
-  try {
-    return new Worker("../stockfish/stockfish.js");
-  } catch (error) {
-    self.postMessage({
-      type: "runtime-unavailable",
-      commands,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Stockfish WebAssembly assets are not bundled yet. Add /stockfish/stockfish.js and /stockfish/stockfish.wasm to activate offline browser play."
-    });
-    throw error;
+function createEngineWorker(engineScriptPath, engineWasmPath) {
+  if (typeof engineScriptPath !== "string" || engineScriptPath.length === 0) {
+    throw new Error("Stockfish engine script path was not provided to the browser worker.");
   }
+
+  if (typeof engineWasmPath !== "string" || engineWasmPath.length === 0) {
+    throw new Error("Stockfish engine wasm path was not provided to the browser worker.");
+  }
+
+  const engineScriptUrl = new URL(engineScriptPath, self.location.origin).href;
+  const engineWasmUrl = new URL(engineWasmPath, self.location.origin).href;
+  return new Worker(`${engineScriptUrl}#${encodeURIComponent(engineWasmUrl)}`);
 }
 
 function normalizeEngineMessage(message) {

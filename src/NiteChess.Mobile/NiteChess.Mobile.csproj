@@ -19,8 +19,7 @@
 
   <ItemGroup>
     <MauiAsset Update="Resources/Raw/Stockfish/**/*.json;Resources/Raw/Stockfish/**/*.nnue" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
-    <AndroidNativeLibrary Include="Resources/Raw/Stockfish/native/android-arm64-v8a/libnitechess_stockfish_bridge.so" Condition="Exists('Resources/Raw/Stockfish/native/android-arm64-v8a/libnitechess_stockfish_bridge.so')" />
-    <AndroidNativeLibrary Include="Resources/Raw/Stockfish/native/android-x86_64/libnitechess_stockfish_bridge.so" Condition="Exists('Resources/Raw/Stockfish/native/android-x86_64/libnitechess_stockfish_bridge.so')" />
+    <MauiAsset Include="Resources/Raw/Stockfish/native/android-arm64-v8a/stockfish" LogicalName="Stockfish/native/android-arm64-v8a/stockfish" Condition="Exists('Resources/Raw/Stockfish/native/android-arm64-v8a/stockfish')" />
     <NativeReference Include="Resources/Raw/Stockfish/native/ios-arm64/libnitechess_stockfish_bridge.a" Condition="Exists('Resources/Raw/Stockfish/native/ios-arm64/libnitechess_stockfish_bridge.a')">
       <Kind>Static</Kind>
       <ForceLoad>True</ForceLoad>
