@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using NiteChess.Application.Configuration;
+using NiteChess.Application.GameSessions;
 using NiteChess.Stockfish.Abstractions;
 
 namespace NiteChess.Application.DependencyInjection;
@@ -22,6 +23,8 @@ public static class NiteChessServiceCollectionExtensions
             Platform = platformDescriptor,
             Stockfish = stockfishRuntime
         });
+        services.AddSingleton<IGameSessionService, GameSessionService>();
+        services.AddSingleton<IGameSessionPersistenceService, GameSessionPersistenceService>();
 
         return services;
     }

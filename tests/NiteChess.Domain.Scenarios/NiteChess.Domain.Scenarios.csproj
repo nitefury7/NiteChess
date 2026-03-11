@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/NiteChess.Application/NiteChess.Application.csproj" />
     <ProjectReference Include="../../src/NiteChess.Domain/NiteChess.Domain.csproj" />
   </ItemGroup>
 </Project>
