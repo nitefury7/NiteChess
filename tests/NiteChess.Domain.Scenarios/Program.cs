@@ -414,21 +414,29 @@ static void NativeProcessStockfishPathCanSmokeRequestOneEngineMove()
 
 static void NativeLibraryStockfishPathCanParseOneBridgedEngineMove()
 {
+    var factory = new TestNativeLibraryStockfishEngineClientFactory(
+        _ => "bestmove e2e4 ponder e7e5",
+        runtimeDescriptor =>
+        {
+            Assert.Equal("mobile-test", runtimeDescriptor.HostId, "The mobile native-library scenario should preserve the mobile host id.");
+            Assert.Equal(StockfishIntegrationMode.NativeLibrary, runtimeDescriptor.IntegrationMode, "The mobile runtime should stay on the native-library integration mode for host-specific resolution.");
+            Assert.Equal("Resources/Raw/Stockfish/mobile-stockfish.bundle.json", runtimeDescriptor.RuntimeLocation, "The mobile runtime should flow the bundle-manifest location into native-library client resolution.");
+            Assert.True(runtimeDescriptor.IsBundled, "The mobile runtime descriptor should remain marked as bundled.");
+        });
+
     var engine = new RuntimeConfiguredStockfishEngineClient(
         new StockfishRuntimeDescriptor(
             HostId: "mobile-test",
             IntegrationMode: StockfishIntegrationMode.NativeLibrary,
-            RuntimeLocation: "Resources/Raw/Stockfish/native/android-arm64-v8a/libnitechess_stockfish_bridge",
+            RuntimeLocation: "Resources/Raw/Stockfish/mobile-stockfish.bundle.json",
             IsBundled: true,
-            Notes: "Scenario-local mobile bridge stub."),
-        new[]
-        {
-            new TestNativeLibraryStockfishEngineClientFactory(_ => "bestmove e2e4 ponder e7e5")
-        });
+            Notes: "Scenario-local mobile bundle manifest stub."),
+        new[] { factory });
     var service = new StockfishComputerMoveService(engine);
 
     var move = GetComputerMove(service, new GameSessionService().CreateSession(), AiDifficulty.Medium);
 
+    Assert.Equal(1, factory.CreateCallCount, "The native-library runtime should be resolved through a host factory instead of falling back to the unsupported client.");
     Assert.Equal(
         ChessMove.Parse("e2e4"),
         move,
@@ -659,11 +667,17 @@ sealed class CapturingStockfishEngineClient : IStockfishEngineClient
 sealed class TestNativeLibraryStockfishEngineClientFactory : IStockfishEngineClientFactory
 {
     private readonly Func<string, string> _bridgeInvoker;
+    private readonly Action<StockfishRuntimeDescriptor>? _onCreate;
 
-    public TestNativeLibraryStockfishEngineClientFactory(Func<string, string> bridgeInvoker)
+    public TestNativeLibraryStockfishEngineClientFactory(
+        Func<string, string> bridgeInvoker,
+        Action<StockfishRuntimeDescriptor>? onCreate = null)
     {
         _bridgeInvoker = bridgeInvoker;
+        _onCreate = onCreate;
     }
+
+    public int CreateCallCount { get; private set; }
 
     public bool CanCreate(StockfishRuntimeDescriptor runtimeDescriptor)
     {
@@ -672,6 +686,8 @@ sealed class TestNativeLibraryStockfishEngineClientFactory : IStockfishEngineCli
 
     public IStockfishEngineClient Create(StockfishRuntimeDescriptor runtimeDescriptor)
     {
+        CreateCallCount++;
+        _onCreate?.Invoke(runtimeDescriptor);
         return new TestNativeLibraryStockfishEngineClient(runtimeDescriptor, _bridgeInvoker);
     }
 }
