@@ -30,4 +30,11 @@ Wave 1 scaffolds the shared .NET 10 solution architecture for a cross-platform c
   - `dotnet run --project src/NiteChess.Web.Client`
   - `dotnet run --project src/NiteChess.Desktop`
 
-This milestone intentionally stops at scaffold/buildability and initial architecture seams. Chess rules, gameplay flows, persistence, and full Stockfish integration are deferred to later waves.
+The repository evolves in milestone-sized slices. Use the platform-specific notes below for the surfaces that are currently implemented.
+
+## Web gameplay
+
+- Run the hosted browser client with `dotnet run --project src/NiteChess.Web.Host` and open the local URL printed by ASP.NET Core.
+- The Blazor WebAssembly page now supports local two-player play, offline AI play, move history, and manual save/load snapshots in the browser.
+- Offline AI uses the bundled Stockfish worker and WebAssembly assets under `src/NiteChess.Web.Client/wwwroot/stockfish`.
+- Once the browser has loaded and cached the app bundle plus those Stockfish assets, local play and AI turns continue without server round-trips; multiplayer remains out of scope for the web milestone.

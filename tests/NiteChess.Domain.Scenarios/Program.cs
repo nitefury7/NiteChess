@@ -30,6 +30,7 @@ var scenarios = new (string Name, Action Execute)[]
     ("Computer move service rejects sessions with pending promotion", ComputerMoveServiceRejectsPendingPromotionSessions),
     ("Gameplay controller applies click-to-move turns", GameplayControllerAppliesClickToMoveTurns),
     ("Gameplay controller saves and loads snapshot drafts", GameplayControllerSavesAndLoadsSnapshotDrafts),
+    ("Gameplay controller reports invalid manual snapshot loads", GameplayControllerReportsInvalidManualSnapshotLoads),
     ("Gameplay controller can open with the AI move when human plays black", GameplayControllerStartsAiGameAndRequestsOpeningMove)
 };
 
@@ -521,6 +522,19 @@ static void GameplayControllerSavesAndLoadsSnapshotDrafts()
     var restoredPawn = controller.State.BoardSquares.Single(square => square.Position == ChessPosition.Parse("e4"));
     Assert.Equal(new ChessPiece(ChessColor.White, PieceType.Pawn), restoredPawn.Piece, "Loading the saved snapshot should restore the moved pawn.");
     Assert.Equal(1, controller.State.MoveHistory.Count, "Loading the saved snapshot should restore the move history.");
+}
+
+static void GameplayControllerReportsInvalidManualSnapshotLoads()
+{
+    var controller = CreateGameplayController();
+
+    controller.UpdateSaveDraft("not valid json");
+    Assert.Equal("not valid json", controller.State.SaveDraft, "Manual save-draft edits should flow into gameplay state for text-area driven clients.");
+
+    GetTask(controller.LoadSnapshotAsync(controller.State.SaveDraft));
+
+    Assert.True(controller.State.MessageText.StartsWith("Load failed:", StringComparison.Ordinal), "Invalid manual snapshot loads should surface a user-facing failure message.");
+    Assert.Equal("not valid json", controller.State.SaveDraft, "Failed loads should preserve the manually entered draft so the user can correct it.");
 }
 
 static void GameplayControllerStartsAiGameAndRequestsOpeningMove()

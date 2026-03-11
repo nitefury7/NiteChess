@@ -1,19 +1,238 @@
 @page "/"
+@implements IDisposable
+@inject GameplayController Gameplay
 @inject NiteChessBootstrapManifest Manifest
 
 <PageTitle>NiteChess Web</PageTitle>
 
-<h1>NiteChess Web Scaffold</h1>
+<div class="home-shell">
+    <section class="hero-card">
+        <div>
+            <p class="eyebrow">NiteChess Web</p>
+            <h1>Browser gameplay</h1>
+            <p class="hero-copy">Play local chess or challenge the bundled offline Stockfish engine directly in the Blazor WebAssembly client.</p>
+        </div>
+        <div class="hero-meta">
+            <span>@Manifest.Platform.Surface</span>
+            <span>@Manifest.Stockfish.IntegrationMode</span>
+            <span>Offline AI: @(Manifest.Platform.SupportsOfflineAi ? "Yes" : "No")</span>
+        </div>
+    </section>
 
-<p>Hosted Blazor WebAssembly shell is wired and ready for future chess features.</p>
+    <div class="gameplay-layout">
+        <section class="board-panel panel">
+            <div class="status-stack">
+                <p class="mode-line">@State.ModeSummary</p>
+                <h2>@State.StatusText</h2>
+                <p class="message-line">@State.MessageText</p>
+                <p class="runtime-line">@State.AiRuntimeSummary</p>
+            </div>
 
-<ul>
-    <li><strong>Host:</strong> @Manifest.Platform.HostId</li>
-    <li><strong>Surface:</strong> @Manifest.Platform.Surface</li>
-    <li><strong>Offline AI:</strong> @Manifest.Platform.SupportsOfflineAi</li>
-    <li><strong>Online play:</strong> @Manifest.Platform.SupportsOnlinePlay</li>
-    <li><strong>Stockfish seam:</strong> @Manifest.Stockfish.IntegrationMode</li>
-    <li><strong>Runtime:</strong> @Manifest.Stockfish.RuntimeLocation</li>
-    <li><strong>Notes:</strong> @Manifest.Platform.Notes</li>
-    <li><strong>AI notes:</strong> @Manifest.Stockfish.Notes</li>
-</ul>
+            <div class="board-shell">
+                <div class="board-grid" role="grid" aria-label="Chess board">
+                    @foreach (var square in State.BoardSquares)
+                    {
+                        <button class="@GetSquareClasses(square)"
+                                type="button"
+                                data-square="@square.Position"
+                                title="@DescribeSquare(square)"
+                                aria-label="@DescribeSquare(square)"
+                                disabled="@IsBoardDisabled"
+                                @onclick="() => SelectSquareAsync(square.Position)">
+                            <span class="piece-glyph">@square.PieceGlyph</span>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="promotion-panel @(State.HasPendingPromotion ? string.Empty : "hidden")">
+                <p>@State.PendingPromotionPrompt</p>
+                <div class="promotion-actions">
+                    @foreach (var pieceType in State.PendingPromotionChoices)
+                    {
+                        <button class="secondary-button" type="button" disabled="@State.IsBusy" @onclick="() => ChoosePromotionAsync(pieceType)">
+                            Promote to @pieceType
+                        </button>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <aside class="side-panel">
+            <section class="panel">
+                <h3>Game setup</h3>
+                <label>
+                    <span>AI difficulty</span>
+                    <select @bind="_selectedDifficulty">
+                        @foreach (var difficulty in Gameplay.AvailableDifficulties)
+                        {
+                            <option value="@difficulty">@difficulty</option>
+                        }
+                    </select>
+                </label>
+
+                <label>
+                    <span>Human plays</span>
+                    <select @bind="_selectedHumanColor">
+                        @foreach (var color in Gameplay.AvailableHumanColors)
+                        {
+                            <option value="@color">@FormatColor(color)</option>
+                        }
+                    </select>
+                </label>
+
+                <div class="button-row">
+                    <button class="primary-button" type="button" @onclick="StartLocalGameAsync">New local game</button>
+                    <button class="primary-button" type="button" @onclick="StartComputerGameAsync">New AI game</button>
+                </div>
+
+                <p class="support-copy">Offline AI stays inside the browser by loading the bundled Stockfish worker and WebAssembly assets from `wwwroot/stockfish`.</p>
+            </section>
+
+            <section class="panel">
+                <h3>Move history</h3>
+                @if (State.MoveHistory.Count == 0)
+                {
+                    <p class="empty-state">No moves yet.</p>
+                }
+                else
+                {
+                    <ol class="history-list">
+                        @foreach (var entry in State.MoveHistory)
+                        {
+                            <li>@entry</li>
+                        }
+                    </ol>
+                }
+            </section>
+
+            <section class="panel">
+                <h3>Save / load</h3>
+                <p class="support-copy">Copy the snapshot payload if you want to keep the current game, then paste any valid payload back here to restore it in the browser client.</p>
+                <div class="button-row">
+                    <button class="secondary-button" type="button" @onclick="SaveSnapshot">Save snapshot</button>
+                    <button class="secondary-button" type="button" @onclick="LoadSnapshotAsync">Load snapshot</button>
+                </div>
+                <textarea class="snapshot-box"
+                          value="@State.SaveDraft"
+                          @oninput="OnSnapshotInput"
+                          spellcheck="false"
+                          aria-label="Saved session snapshot"></textarea>
+            </section>
+
+            <section class="panel panel-accent">
+                <h3>Offline expectations</h3>
+                <p>Once the browser has loaded the app bundle plus the Stockfish worker/WASM assets, local play and AI turns continue without server round-trips.</p>
+                <p class="support-copy">Multiplayer is intentionally out of scope for this milestone and remains a future backend/client integration task.</p>
+            </section>
+        </aside>
+    </div>
+</div>
+
+@code {
+    private AiDifficulty _selectedDifficulty = AiDifficulty.Medium;
+    private ChessColor _selectedHumanColor = ChessColor.White;
+
+    private GameplayViewState State => Gameplay.State;
+
+    private bool IsBoardDisabled => State.IsBusy || State.HasPendingPromotion || State.IsComputerTurn;
+
+    protected override void OnInitialized()
+    {
+        Gameplay.StateChanged += OnGameplayStateChanged;
+        SyncSelections();
+    }
+
+    public void Dispose()
+    {
+        Gameplay.StateChanged -= OnGameplayStateChanged;
+    }
+
+    private void OnGameplayStateChanged(object? sender, EventArgs args)
+    {
+        _ = InvokeAsync(() =>
+        {
+            SyncSelections();
+            StateHasChanged();
+        });
+    }
+
+    private void SyncSelections()
+    {
+        _selectedDifficulty = State.SelectedDifficulty;
+
+        if (State.ComputerPlayerColor is ChessColor computerColor)
+        {
+            _selectedHumanColor = computerColor == ChessColor.White ? ChessColor.Black : ChessColor.White;
+        }
+    }
+
+    private Task StartLocalGameAsync()
+    {
+        return Gameplay.StartLocalGameAsync().AsTask();
+    }
+
+    private Task StartComputerGameAsync()
+    {
+        return Gameplay.StartComputerGameAsync(_selectedHumanColor, _selectedDifficulty).AsTask();
+    }
+
+    private Task SelectSquareAsync(ChessPosition position)
+    {
+        return Gameplay.SelectSquareAsync(position).AsTask();
+    }
+
+    private Task ChoosePromotionAsync(PieceType pieceType)
+    {
+        return Gameplay.ChoosePromotionAsync(pieceType).AsTask();
+    }
+
+    private void SaveSnapshot()
+    {
+        Gameplay.SaveSnapshot();
+    }
+
+    private Task LoadSnapshotAsync()
+    {
+        return Gameplay.LoadSnapshotAsync(State.SaveDraft).AsTask();
+    }
+
+    private void OnSnapshotInput(ChangeEventArgs args)
+    {
+        Gameplay.UpdateSaveDraft(args.Value?.ToString());
+    }
+
+    private static string GetSquareClasses(ChessBoardSquareViewState square)
+    {
+        var classes = new List<string>
+        {
+            "board-square",
+            square.IsLightSquare ? "light-square" : "dark-square"
+        };
+
+        if (square.IsSelected)
+        {
+            classes.Add("selected-square");
+        }
+
+        if (square.IsLegalDestination)
+        {
+            classes.Add("legal-square");
+        }
+
+        classes.Add(square.Piece?.Color == ChessColor.White ? "white-piece" : square.Piece is null ? "empty-square" : "black-piece");
+        return string.Join(' ', classes);
+    }
+
+    private static string DescribeSquare(ChessBoardSquareViewState square)
+    {
+        return square.Piece is ChessPiece piece
+            ? $"{square.Position}: {piece}"
+            : $"{square.Position}: empty";
+    }
+
+    private static string FormatColor(ChessColor color)
+    {
+        return color == ChessColor.White ? "White" : "Black";
+    }
+}

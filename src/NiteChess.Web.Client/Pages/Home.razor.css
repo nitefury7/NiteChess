@@ -1,0 +1,185 @@
+.home-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.hero-card,
+.panel {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.hero-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+}
+
+.eyebrow,
+.mode-line {
+  margin: 0;
+  color: #475569;
+  font-weight: 600;
+}
+
+.hero-card h1,
+.board-panel h2,
+.panel h3 {
+  margin: 0;
+}
+
+.hero-copy,
+.message-line,
+.runtime-line,
+.support-copy,
+.empty-state,
+.panel-accent p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.hero-meta,
+.button-row,
+.promotion-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hero-meta span {
+  background: #e2e8f0;
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.gameplay-layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1.6fr) minmax(20rem, 1fr);
+}
+
+.board-panel,
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.board-shell {
+  background: #0f172a;
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  aspect-ratio: 1;
+}
+
+.board-square {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  font-size: clamp(1.8rem, 5vw, 2.9rem);
+  cursor: pointer;
+}
+
+.board-square:disabled {
+  cursor: not-allowed;
+}
+
+.piece-glyph {
+  line-height: 1;
+}
+
+.light-square { background: #eeeed2; }
+.dark-square { background: #769656; }
+.selected-square { background: #f6f669; }
+.legal-square { background: #baca44; }
+.white-piece {
+  color: #f9fafb;
+  text-shadow: 0 0 1px #0f172a, 0 1px 2px rgba(15, 23, 42, 0.4);
+}
+
+.black-piece {
+  color: #111827;
+  text-shadow: 0 0 1px #f8fafc, 0 1px 2px rgba(248, 250, 252, 0.3);
+}
+
+.promotion-panel,
+.status-stack,
+.panel,
+.panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.hidden {
+  display: none;
+}
+
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+select,
+.snapshot-box {
+  width: 100%;
+  border: 1px solid #94a3b8;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  background: #fff;
+}
+
+.snapshot-box {
+  min-height: 13rem;
+  resize: vertical;
+}
+
+.primary-button,
+.secondary-button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+}
+
+.primary-button { background: #0f172a; color: #f8fafc; }
+.secondary-button { background: #e2e8f0; color: #0f172a; }
+
+.history-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.panel-accent {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+@media (max-width: 960px) {
+  .hero-card {
+    flex-direction: column;
+  }
+
+  .gameplay-layout {
+    grid-template-columns: 1fr;
+  }
+}
