@@ -20,6 +20,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NiteChess.Desktop", "src\Ni
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NiteChess.Mobile", "src\NiteChess.Mobile\NiteChess.Mobile.csproj", "{3B47AA25-3124-405B-8D8C-E93EAC267D48}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NiteChess.Domain.Scenarios", "tests\NiteChess.Domain.Scenarios\NiteChess.Domain.Scenarios.csproj", "{D9E2F43D-6A53-4B89-9A42-7F204D9F20AD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -62,6 +64,10 @@ Global
 		{3B47AA25-3124-405B-8D8C-E93EAC267D48}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3B47AA25-3124-405B-8D8C-E93EAC267D48}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3B47AA25-3124-405B-8D8C-E93EAC267D48}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E2F43D-6A53-4B89-9A42-7F204D9F20AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E2F43D-6A53-4B89-9A42-7F204D9F20AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E2F43D-6A53-4B89-9A42-7F204D9F20AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E2F43D-6A53-4B89-9A42-7F204D9F20AD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
