@@ -202,7 +202,7 @@ public sealed class ChessGame
 
             var targetPiece = Board[target];
 
-            if (targetPiece is ChessPiece occupiedPiece && occupiedPiece.Color != piece.Color)
+            if (targetPiece is ChessPiece occupiedPiece && CanCapturePiece(piece.Color, occupiedPiece))
             {
                 AddPawnMoves(moves, from, target, promotionRank);
                 continue;
@@ -230,7 +230,7 @@ public sealed class ChessGame
 
             var targetPiece = Board[target];
 
-            if (targetPiece is null || targetPiece.Value.Color != piece.Color)
+            if (targetPiece is null || CanCapturePiece(piece.Color, targetPiece.Value))
             {
                 moves.Add(new ChessMove(from, target));
             }
@@ -258,7 +258,7 @@ public sealed class ChessGame
                     continue;
                 }
 
-                if (targetPiece.Value.Color != piece.Color)
+                if (CanCapturePiece(piece.Color, targetPiece.Value))
                 {
                     moves.Add(new ChessMove(from, target));
                 }
@@ -302,6 +302,11 @@ public sealed class ChessGame
         }
 
         moves.Add(new ChessMove(from, to));
+    }
+
+    private static bool CanCapturePiece(ChessColor movingColor, ChessPiece targetPiece)
+    {
+        return targetPiece.Color != movingColor && targetPiece.Type != PieceType.King;
     }
 
     private bool CanCastle(ChessColor color, CastlingSide side)

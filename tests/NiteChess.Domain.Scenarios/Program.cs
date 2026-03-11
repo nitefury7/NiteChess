@@ -4,6 +4,7 @@ var scenarios = new (string Name, Action Execute)[]
 {
     ("Initial position offers 20 legal moves", InitialPositionOffersTwentyLegalMoves),
     ("Fool's mate is checkmate", FoolsMateIsCheckmate),
+    ("Custom positions never generate direct king captures", CustomPositionDoesNotGenerateDirectKingCapture),
     ("Pinned rook cannot abandon its file", PinnedRookCannotExposeItsKing),
     ("Castling is available when squares are clear and safe", CastlingIsGeneratedWhenLegal),
     ("Castling through check is rejected", CastlingThroughCheckIsRejected),
@@ -80,6 +81,29 @@ static void PinnedRookCannotExposeItsKing()
 
     Assert.False(game.IsLegalMove(ChessMove.Parse("e2d2")), "Pinned rook should not be able to leave the e-file.");
     Assert.True(game.IsLegalMove(ChessMove.Parse("e2e8")), "Capturing the attacking rook should remain legal.");
+}
+
+static void CustomPositionDoesNotGenerateDirectKingCapture()
+{
+    var customGame = CreateGame(
+        ChessColor.White,
+        CastlingRights.None,
+        ("h1", new ChessPiece(ChessColor.White, PieceType.King)),
+        ("e7", new ChessPiece(ChessColor.White, PieceType.Queen)),
+        ("e8", new ChessPiece(ChessColor.Black, PieceType.King)));
+
+    var illegalCapture = ChessMove.Parse("e7e8");
+    Assert.False(customGame.IsLegalMove(illegalCapture), "Legal move generation should never allow directly capturing the opposing king.");
+    Assert.NotContains(illegalCapture, customGame.GetLegalMoves(ChessPosition.Parse("e7")), "The opposing king square must be excluded from legal move generation.");
+
+    var checkedGame = CreateGame(
+        ChessColor.Black,
+        CastlingRights.None,
+        ("h1", new ChessPiece(ChessColor.White, PieceType.King)),
+        ("e7", new ChessPiece(ChessColor.White, PieceType.Queen)),
+        ("e8", new ChessPiece(ChessColor.Black, PieceType.King)));
+
+    Assert.Equal(ChessGameStatus.Check, checkedGame.GetStatus(), "Custom positions should resolve via check semantics instead of king-capture moves.");
 }
 
 static void CastlingIsGeneratedWhenLegal()
@@ -215,6 +239,14 @@ static class Assert
         if (!values.Contains(expected))
         {
             throw new InvalidOperationException($"{message} Missing: {expected}.");
+        }
+    }
+
+    public static void NotContains<T>(T expected, IEnumerable<T> values, string message)
+    {
+        if (values.Contains(expected))
+        {
+            throw new InvalidOperationException($"{message} Unexpected: {expected}.");
         }
     }
 
