@@ -2,6 +2,7 @@ using Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using NiteChess.Application.Configuration;
 using NiteChess.Application.DependencyInjection;
+using NiteChess.Application.Gameplay;
 using NiteChess.Desktop.Services;
 using NiteChess.Stockfish.Abstractions;
 
@@ -28,6 +29,9 @@ internal static class Program
                 IsBundled: false,
                 Notes: "Bundle manifest ships at Assets/Stockfish/desktop-stockfish.bundle.json; drop Stockfish 18 executables and NNUE files into the per-RID native folders."));
         services.AddSingleton<IStockfishRuntimeBootstrapper, DesktopStockfishRuntimeBootstrapper>();
+        services.AddSingleton<GameplayController>();
+        services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<MainWindow>();
 
         App.Services = services.BuildServiceProvider();
 

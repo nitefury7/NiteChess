@@ -1,18 +1,20 @@
+using NiteChess.Application.Gameplay;
 using NiteChess.Application.Configuration;
 
 namespace NiteChess.Desktop;
 
 public sealed class MainWindowViewModel
 {
-    public MainWindowViewModel(NiteChessBootstrapManifest manifest)
+    public MainWindowViewModel(NiteChessBootstrapManifest manifest, GameplayController gameplay)
     {
         Title = "NiteChess Desktop";
-        Summary = $"{manifest.Platform.Surface} scaffold ready. " +
-                  $"Offline AI seam: {manifest.Stockfish.IntegrationMode}. " +
-                  "Future gameplay UI and Stockfish process wiring are intentionally deferred.";
+        Subtitle = $"{manifest.Platform.Surface} board play, history, save/load, and offline AI.";
+        Gameplay = gameplay ?? throw new ArgumentNullException(nameof(gameplay));
     }
 
     public string Title { get; }
 
-    public string Summary { get; }
+    public string Subtitle { get; }
+
+    public GameplayController Gameplay { get; }
 }

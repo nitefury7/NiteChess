@@ -1,4 +1,5 @@
 using NiteChess.Application.ComputerPlay;
+using NiteChess.Application.Gameplay;
 using NiteChess.Application.GameSessions;
 using NiteChess.Domain.Chess;
 using NiteChess.Stockfish;
@@ -26,7 +27,10 @@ var scenarios = new (string Name, Action Execute)[]
     ("Native-process Stockfish path can smoke-request one engine move", NativeProcessStockfishPathCanSmokeRequestOneEngineMove),
     ("Native-library Stockfish path can parse one bridged engine move", NativeLibraryStockfishPathCanParseOneBridgedEngineMove),
     ("Computer move service requests and validates an engine move", ComputerMoveServiceRequestsAndValidatesEngineMove),
-    ("Computer move service rejects sessions with pending promotion", ComputerMoveServiceRejectsPendingPromotionSessions)
+    ("Computer move service rejects sessions with pending promotion", ComputerMoveServiceRejectsPendingPromotionSessions),
+    ("Gameplay controller applies click-to-move turns", GameplayControllerAppliesClickToMoveTurns),
+    ("Gameplay controller saves and loads snapshot drafts", GameplayControllerSavesAndLoadsSnapshotDrafts),
+    ("Gameplay controller can open with the AI move when human plays black", GameplayControllerStartsAiGameAndRequestsOpeningMove)
 };
 
 var failures = new List<string>();
@@ -469,6 +473,65 @@ static void ComputerMoveServiceRejectsPendingPromotionSessions()
         "Computer move requests should be rejected while a promotion choice is pending.");
 }
 
+static void GameplayControllerAppliesClickToMoveTurns()
+{
+    var controller = CreateGameplayController();
+
+    GetTask(controller.SelectSquareAsync(ChessPosition.Parse("e2")));
+
+    var selectedPawn = controller.State.BoardSquares.Single(square => square.Position == ChessPosition.Parse("e2"));
+    var legalTarget = controller.State.BoardSquares.Single(square => square.Position == ChessPosition.Parse("e4"));
+
+    Assert.True(selectedPawn.IsSelected, "Selecting e2 should highlight the pawn square.");
+    Assert.True(legalTarget.IsLegalDestination, "Selecting e2 should highlight e4 as a legal target.");
+
+    GetTask(controller.SelectSquareAsync(ChessPosition.Parse("e4")));
+
+    var movedPawn = controller.State.BoardSquares.Single(square => square.Position == ChessPosition.Parse("e4"));
+    Assert.Equal(new ChessPiece(ChessColor.White, PieceType.Pawn), movedPawn.Piece, "The white pawn should land on e4 after click-to-move.");
+    Assert.Equal(1, controller.State.MoveHistory.Count, "Applying a click-to-move turn should record one history entry.");
+    Assert.Equal("1. e2e4", controller.State.MoveHistory[0], "Move history should expose the human-readable ply text.");
+    Assert.False(controller.State.BoardSquares.Any(square => square.IsSelected), "Selection should clear after a move is applied.");
+}
+
+static void GameplayControllerSavesAndLoadsSnapshotDrafts()
+{
+    var controller = CreateGameplayController();
+
+    GetTask(controller.SelectSquareAsync(ChessPosition.Parse("e2")));
+    GetTask(controller.SelectSquareAsync(ChessPosition.Parse("e4")));
+    controller.SaveSnapshot();
+
+    var snapshot = controller.State.SaveDraft;
+    Assert.True(!string.IsNullOrWhiteSpace(snapshot), "Saving should populate the snapshot draft payload.");
+
+    GetTask(controller.StartLocalGameAsync());
+    Assert.Equal(0, controller.State.MoveHistory.Count, "Starting a new local game should reset move history.");
+
+    GetTask(controller.LoadSnapshotAsync(snapshot));
+
+    var restoredPawn = controller.State.BoardSquares.Single(square => square.Position == ChessPosition.Parse("e4"));
+    Assert.Equal(new ChessPiece(ChessColor.White, PieceType.Pawn), restoredPawn.Piece, "Loading the saved snapshot should restore the moved pawn.");
+    Assert.Equal(1, controller.State.MoveHistory.Count, "Loading the saved snapshot should restore the move history.");
+}
+
+static void GameplayControllerStartsAiGameAndRequestsOpeningMove()
+{
+    var computerService = new ScriptedComputerMoveService(ChessMove.Parse("e2e4"));
+    var runtimeBootstrapper = new TestRuntimeBootstrapper();
+    var controller = CreateGameplayController(computerService, runtimeBootstrapper);
+
+    GetTask(controller.StartComputerGameAsync(ChessColor.Black, AiDifficulty.Hard));
+
+    Assert.Equal(1, computerService.RequestedDifficulties.Count, "Starting an AI game as Black should immediately request the opening computer move.");
+    Assert.Equal(AiDifficulty.Hard, computerService.RequestedDifficulties[0], "The selected AI difficulty should flow into the computer move request.");
+    Assert.Equal(1, runtimeBootstrapper.WarmUpCallCount, "The AI runtime bootstrapper should warm up before the first engine move.");
+    Assert.Equal(1, controller.State.MoveHistory.Count, "The AI opening move should be recorded into move history.");
+    Assert.Equal("1. e2e4", controller.State.MoveHistory[0], "The AI opening move should surface in move history.");
+    Assert.Equal(ChessColor.Black, controller.State.SideToMove, "After the AI opening move it should be Black to move.");
+    Assert.Equal(ChessColor.Black, controller.State.BoardPerspective, "Playing as Black should flip the board perspective.");
+}
+
 static ChessGame CreateGame(
     ChessColor sideToMove,
     CastlingRights castlingRights,
@@ -487,6 +550,22 @@ static ChessGame CreateGame(
 static ChessMove GetComputerMove(IComputerMoveService service, LocalGameSession session, AiDifficulty difficulty)
 {
     return service.GetMoveAsync(session, difficulty).AsTask().GetAwaiter().GetResult();
+}
+
+static void GetTask(ValueTask task)
+{
+    task.AsTask().GetAwaiter().GetResult();
+}
+
+static GameplayController CreateGameplayController(
+    IComputerMoveService? computerMoveService = null,
+    TestRuntimeBootstrapper? runtimeBootstrapper = null)
+{
+    return new GameplayController(
+        new GameSessionService(),
+        new GameSessionPersistenceService(),
+        computerMoveService ?? new ScriptedComputerMoveService(ChessMove.Parse("e7e5")),
+        runtimeBootstrapper ?? new TestRuntimeBootstrapper());
 }
 
 static string CreateFakeNativeStockfishRuntime()
@@ -625,6 +704,49 @@ sealed class TestNativeLibraryStockfishEngineClient : IStockfishEngineClient
 
         var ponder = parts.Length >= 4 && parts[2] == "ponder" ? parts[3] : null;
         return ValueTask.FromResult(new StockfishEngineResponse(parts[1], ponder, commands.Concat(new[] { line }).ToArray()));
+    }
+}
+
+sealed class ScriptedComputerMoveService : IComputerMoveService
+{
+    private readonly ChessMove _move;
+
+    public ScriptedComputerMoveService(ChessMove move)
+    {
+        _move = move;
+    }
+
+    public List<AiDifficulty> RequestedDifficulties { get; } = new();
+
+    public ValueTask<ChessMove> GetMoveAsync(
+        LocalGameSession session,
+        AiDifficulty difficulty,
+        CancellationToken cancellationToken = default)
+    {
+        RequestedDifficulties.Add(difficulty);
+        return ValueTask.FromResult(_move);
+    }
+}
+
+sealed class TestRuntimeBootstrapper : IStockfishRuntimeBootstrapper
+{
+    public int WarmUpCallCount { get; private set; }
+
+    public StockfishRuntimeDescriptor Describe()
+    {
+        return new StockfishRuntimeDescriptor(
+            HostId: "scenario-gameplay",
+            IntegrationMode: StockfishIntegrationMode.NativeProcess,
+            RuntimeLocation: "scenario/fake-stockfish",
+            IsBundled: true,
+            Notes: "Scenario-local gameplay runtime stub.");
+    }
+
+    public ValueTask WarmUpAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        WarmUpCallCount++;
+        return ValueTask.CompletedTask;
     }
 }
 
