@@ -9,3 +9,10 @@ TestResults/
 *.suo
 *.swp
 *.nupkg
+.tmp-desktop-*/
+src/NiteChess.Desktop/Assets/Stockfish/native/osx-arm64/stockfish
+src/NiteChess.Desktop/Assets/Stockfish/native/osx-x64/stockfish
+src/NiteChess.Desktop/Assets/Stockfish/native/linux-x64/stockfish
+src/NiteChess.Mobile/Resources/Raw/Stockfish/native/android-arm64-v8a/stockfish
+src/NiteChess.Mobile/Resources/Raw/Stockfish/native/ios-arm64/libnitechess_stockfish_bridge.a
+src/NiteChess.Web.Client/wwwroot/stockfish/stockfish.wasm

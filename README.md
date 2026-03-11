@@ -54,7 +54,7 @@ If MAUI workloads or platform SDKs are unavailable, desktop/backend/web builds m
 ### Desktop
 
 - Start the Avalonia app with `dotnet run --project src/NiteChess.Desktop`.
-- Desktop ships bundled Stockfish assets under `src/NiteChess.Desktop/Assets/Stockfish` and copies them to the app output.
+- Desktop resolves Stockfish assets from `src/NiteChess.Desktop/Assets/Stockfish` and copies any locally provisioned runtime payloads to the app output.
 - Online multiplayer uses the backend URL entered in the desktop UI.
 
 ### Mobile
@@ -66,24 +66,26 @@ If MAUI workloads or platform SDKs are unavailable, desktop/backend/web builds m
 
 ## Stockfish runtime expectations by target
 
+Large Stockfish payloads are intentionally **not tracked in Git** because they exceed GitHub's 100 MB file limit. Keep them as local, gitignored files at the paths below when you need offline AI on that target.
+
 ### Desktop
 
 - Manifest: `src/NiteChess.Desktop/Assets/Stockfish/desktop-stockfish.bundle.json`
 - Integration mode: native process
-- Bundled payloads currently checked in:
+- Local payloads expected at:
   - `native/osx-arm64/stockfish`
   - `native/osx-x64/stockfish`
   - `native/linux-x64/stockfish`
-- Caveat: the repo contains a reserved `native/linux-arm64` directory, but no Linux arm64 binary is currently bundled. Add one before advertising Linux arm64 offline-AI support.
+- Caveat: the repo contains a reserved `native/linux-arm64` directory, but no Linux arm64 binary is currently provisioned. Add one locally before advertising Linux arm64 offline-AI support.
 
 ### Mobile
 
 - Manifest: `src/NiteChess.Mobile/Resources/Raw/Stockfish/mobile-stockfish.bundle.json`
 - Integration mode: native library/runtime bridge
-- Bundled payloads currently checked in:
+- Local payloads expected at:
   - Android arm64 executable: `native/android-arm64-v8a/stockfish`
   - iOS arm64 bridge library: `native/ios-arm64/libnitechess_stockfish_bridge.a`
-- Caveat: Android `x86_64` emulator payloads are not currently bundled in the repo, so offline AI should be validated on arm64 hardware/images unless an additional `android-x86_64` runtime is added.
+- Caveat: Android `x86_64` emulator payloads are not currently provisioned, so offline AI should be validated on arm64 hardware/images unless an additional `android-x86_64` runtime is added locally.
 
 ### Web
 
@@ -93,7 +95,7 @@ If MAUI workloads or platform SDKs are unavailable, desktop/backend/web builds m
   - `wwwroot/stockfish/stockfish.js`
   - `wwwroot/stockfish/stockfish.wasm`
   - `wwwroot/workers/stockfish.worker.js`
-- Caveat: the worker and WASM assets must be served by the web host; offline AI is browser-local, but multiplayer still depends on the separate backend.
+- Caveat: the worker and JS bridge stay tracked, but `wwwroot/stockfish/stockfish.wasm` is expected as a local gitignored asset that must be served by the web host for offline AI; multiplayer still depends on the separate backend.
 
 ### Backend
 

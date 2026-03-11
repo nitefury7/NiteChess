@@ -10,5 +10,5 @@
     "wwwroot/stockfish/stockfish.js",
     "wwwroot/stockfish/stockfish.wasm"
   ],
-  "notes": "Serve the bundled Stockfish 18 single-threaded WASM engine plus its dedicated worker as static web files so offline browser sessions evaluate locally without any server round-trip."
+  "notes": "Serve the tracked worker plus the locally provisioned Stockfish 18 JS/WASM assets as static web files so offline browser sessions evaluate locally without any server round-trip. The large `stockfish.wasm` payload is intentionally gitignored so the repo stays pushable without Git LFS."
 }
