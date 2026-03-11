@@ -1,0 +1,19 @@
+@page "/"
+@inject NiteChessBootstrapManifest Manifest
+
+<PageTitle>NiteChess Web</PageTitle>
+
+<h1>NiteChess Web Scaffold</h1>
+
+<p>Hosted Blazor WebAssembly shell is wired and ready for future chess features.</p>
+
+<ul>
+    <li><strong>Host:</strong> @Manifest.Platform.HostId</li>
+    <li><strong>Surface:</strong> @Manifest.Platform.Surface</li>
+    <li><strong>Offline AI:</strong> @Manifest.Platform.SupportsOfflineAi</li>
+    <li><strong>Online play:</strong> @Manifest.Platform.SupportsOnlinePlay</li>
+    <li><strong>Stockfish seam:</strong> @Manifest.Stockfish.IntegrationMode</li>
+    <li><strong>Runtime:</strong> @Manifest.Stockfish.RuntimeLocation</li>
+    <li><strong>Notes:</strong> @Manifest.Platform.Notes</li>
+    <li><strong>AI notes:</strong> @Manifest.Stockfish.Notes</li>
+</ul>
