@@ -20,6 +20,27 @@ public static class StockfishRuntimePathResolver
         return ResolvePath(location);
     }
 
+    /// <summary>
+    /// Returns the absolute path to the bundle manifest file declared in
+    /// <paramref name="runtimeDescriptor"/>. Unlike <see cref="Resolve"/>, this
+    /// does not parse the manifest or expand RID tokens — it only resolves the
+    /// manifest file's location on disk.
+    /// </summary>
+    public static string ResolveManifestPath(StockfishRuntimeDescriptor runtimeDescriptor)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeDescriptor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDescriptor.RuntimeLocation);
+
+        if (!IsBundleManifestPath(runtimeDescriptor.RuntimeLocation))
+        {
+            throw new ArgumentException(
+                $"The runtime location '{runtimeDescriptor.RuntimeLocation}' is not a bundle manifest path (.bundle.json).",
+                nameof(runtimeDescriptor));
+        }
+
+        return ResolvePath(runtimeDescriptor.RuntimeLocation);
+    }
+
     private static string ResolveManifestEntryPoint(StockfishRuntimeDescriptor runtimeDescriptor, string manifestLocation)
     {
         var manifestPath = ResolvePath(manifestLocation);

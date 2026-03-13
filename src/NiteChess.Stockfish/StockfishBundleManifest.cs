@@ -29,6 +29,10 @@ public sealed class StockfishBundleManifest
 
     public string? Notes { get; init; }
 
+    public string? StockfishVersion { get; init; }
+
+    public Dictionary<string, StockfishRidDownloadAsset>? RidDownloadAssets { get; init; }
+
     public static StockfishBundleManifest Parse(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
@@ -36,4 +40,11 @@ public sealed class StockfishBundleManifest
         return JsonSerializer.Deserialize<StockfishBundleManifest>(json, SerializerOptions)
                ?? throw new InvalidOperationException("Failed to deserialize the Stockfish bundle manifest.");
     }
+}
+
+public sealed class StockfishRidDownloadAsset
+{
+    public string ArchiveUrl { get; init; } = string.Empty;
+
+    public string ArchiveEntryName { get; init; } = string.Empty;
 }

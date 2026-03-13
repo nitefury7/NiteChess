@@ -29,6 +29,11 @@ internal static class Program
                 RuntimeLocation: "Assets/Stockfish/desktop-stockfish.bundle.json",
                 IsBundled: true,
                 Notes: "Desktop runtime resolution is driven by Assets/Stockfish/desktop-stockfish.bundle.json, which ships Stockfish 18 executables in the per-RID native folders."));
+        services.AddSingleton(_ => new HttpClient
+        {
+            DefaultRequestHeaders = { { "User-Agent", "NiteChess/1.0 (Stockfish asset provisioner)" } }
+        });
+        services.AddSingleton<StockfishAssetDownloader>();
         services.AddSingleton<IStockfishRuntimeBootstrapper, DesktopStockfishRuntimeBootstrapper>();
         services.AddSingleton<IOnlineGameClient, SignalROnlineGameClient>();
         services.AddSingleton<GameplayController>();

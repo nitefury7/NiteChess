@@ -8,5 +8,20 @@
     "Assets/Stockfish/native/osx-x64/stockfish",
     "Assets/Stockfish/native/linux-x64/stockfish"
   ],
-  "notes": "Desktop resolves locally provisioned Stockfish 18 executables from this asset tree for macOS arm64, macOS x64, and Linux x64. Those large runtime files are intentionally gitignored so the repo stays pushable without Git LFS; desktop still copies any present local payloads into the app output."
+  "stockfishVersion": "sf_18",
+  "ridDownloadAssets": {
+    "osx-arm64": {
+      "archiveUrl": "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-macos-m1-apple-silicon.tar",
+      "archiveEntryName": "stockfish/stockfish-macos-m1-apple-silicon"
+    },
+    "osx-x64": {
+      "archiveUrl": "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-macos-x86-64.tar",
+      "archiveEntryName": "stockfish/stockfish-macos-x86-64"
+    },
+    "linux-x64": {
+      "archiveUrl": "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-ubuntu-x86-64.tar",
+      "archiveEntryName": "stockfish/stockfish-ubuntu-x86-64"
+    }
+  },
+  "notes": "Desktop resolves locally provisioned Stockfish 18 executables from this asset tree for macOS arm64, macOS x64, and Linux x64. Those large runtime files are intentionally gitignored so the repo stays pushable without Git LFS; at runtime the bootstrapper auto-downloads the correct RID binary from GitHub Releases when absent."
 }
